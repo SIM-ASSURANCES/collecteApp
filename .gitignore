@@ -1,0 +1,28 @@
+# Dépendances
+node_modules/
+.flutter-plugins
+.flutter-plugins-dependencies
+.dart_tool/
+.packages
+build/
+*.iml
+
+# Environnement
+.env
+.env.production
+.env.local
+
+# Flutter
+collectapp-mobile/build/
+collectapp-mobile/.dart_tool/
+collectapp-mobile/android/.gradle/
+collectapp-mobile/android/local.properties
+collectapp-mobile/android/key.properties
+
+# Logs
+*.log
+logs/
+
+# OS
+.DS_Store
+Thumbs.db

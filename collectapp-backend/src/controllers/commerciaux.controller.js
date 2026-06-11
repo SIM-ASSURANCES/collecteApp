@@ -1,0 +1,88 @@
+const { validationResult } = require('express-validator');
+const bcrypt = require('bcryptjs');
+const db = require('../config/db');
+const logger = require('../config/logger');
+
+exports.list = async (req, res, next) => {
+  try {
+    const commerciaux = await db('utilisateurs')
+      .where({ role: 'COMMERCIAL' })
+      .select('id', 'nom', 'identifiant', 'actif', 'derniere_connexion');
+    res.json(commerciaux);
+  } catch (err) { next(err); }
+};
+
+exports.getOne = async (req, res, next) => {
+  try {
+    const commercial = await db('utilisateurs')
+      .where({ id: req.params.id, role: 'COMMERCIAL' })
+      .select('id', 'nom', 'identifiant', 'actif')
+      .first();
+    if (!commercial) return res.status(404).json({ message: 'Commercial introuvable.' });
+
+    const cotisants = await db('cotisants')
+      .where({ commercial_id: commercial.id, actif: true })
+      .select('id', 'nom', 'telephone', 'montant_journalier');
+
+    res.json({ ...commercial, cotisants });
+  } catch (err) { next(err); }
+};
+
+exports.create = async (req, res, next) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
+
+  const { nom, identifiant, mot_de_passe } = req.body;
+  try {
+    const existe = await db('utilisateurs').where({ identifiant }).first();
+    if (existe) return res.status(409).json({ message: 'Cet identifiant est déjà utilisé.' });
+
+    const hash = await bcrypt.hash(mot_de_passe, 10);
+    const [commercial] = await db('utilisateurs')
+      .insert({ nom, identifiant, mot_de_passe_hash: hash, role: 'COMMERCIAL' })
+      .returning('id', 'nom', 'identifiant', 'role');
+
+    logger.info(`Commercial créé #${commercial.id} par admin #${req.user.id}`);
+    res.status(201).json(commercial);
+  } catch (err) { next(err); }
+};
+
+exports.update = async (req, res, next) => {
+  try {
+    const { nom, identifiant, mot_de_passe } = req.body;
+    const update = { nom, identifiant, updated_at: new Date() };
+    if (mot_de_passe) update.mot_de_passe_hash = await bcrypt.hash(mot_de_passe, 10);
+
+    const [commercial] = await db('utilisateurs')
+      .where({ id: req.params.id })
+      .update(update)
+      .returning('id', 'nom', 'identifiant');
+    if (!commercial) return res.status(404).json({ message: 'Commercial introuvable.' });
+    res.json(commercial);
+  } catch (err) { next(err); }
+};
+
+exports.reassignerCotisants = async (req, res, next) => {
+  const { cotisant_ids, nouveau_commercial_id } = req.body;
+  if (!Array.isArray(cotisant_ids) || !cotisant_ids.length) {
+    return res.status(400).json({ message: 'Liste de cotisants requise.' });
+  }
+  try {
+    await db('cotisants')
+      .whereIn('id', cotisant_ids)
+      .update({ commercial_id: nouveau_commercial_id, updated_at: new Date() });
+    logger.info(`${cotisant_ids.length} cotisants réassignés au commercial #${nouveau_commercial_id}`);
+    res.json({ message: `${cotisant_ids.length} cotisant(s) réassigné(s).` });
+  } catch (err) { next(err); }
+};
+
+exports.desactiver = async (req, res, next) => {
+  try {
+    const [u] = await db('utilisateurs')
+      .where({ id: req.params.id })
+      .update({ actif: false })
+      .returning('id', 'nom');
+    if (!u) return res.status(404).json({ message: 'Commercial introuvable.' });
+    res.json({ message: 'Commercial désactivé.', commercial: u });
+  } catch (err) { next(err); }
+};

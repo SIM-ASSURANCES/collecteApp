@@ -1,0 +1,169 @@
+@import "tailwindcss";
+
+@theme {
+  --color-sim-blue:       #004B9C;
+  --color-sim-blue-dark:  #003A7A;
+  --color-sim-blue-light: #51AEE2;
+  --color-sim-sky:        #7EC8E3;
+  --color-sim-red:        #E02020;
+  --color-sim-yellow:     #F5C518;
+  --color-sim-orange:     #E86B1F;
+  --color-sim-white:      #FFFFFF;
+  --color-sim-gray:       #F4F6FA;
+  --color-sim-gray-dark:  #6B7280;
+  --color-sim-text:       #1A2B4A;
+}
+
+@layer base {
+  body {
+    background-color: #F4F6FA;
+    color: #1A2B4A;
+    font-family: 'Montserrat', Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  #root {
+    min-height: 100vh;
+  }
+
+  * {
+    box-sizing: border-box;
+  }
+}
+
+@layer components {
+  .sim-gradient {
+    background: linear-gradient(135deg, #004B9C 0%, #1a6fc4 50%, #51AEE2 100%);
+  }
+
+  .sim-gradient-header {
+    background: linear-gradient(90deg, #004B9C 0%, #1565C0 60%, #51AEE2 100%);
+  }
+
+  .sim-card {
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 2px 8px rgba(0, 75, 156, 0.08);
+  }
+
+  .sim-btn-primary {
+    background-color: #004B9C;
+    color: white;
+    font-weight: 600;
+    padding: 0.5rem 1.25rem;
+    border-radius: 8px;
+    transition: background-color 0.2s;
+    border: none;
+    cursor: pointer;
+  }
+
+  .sim-btn-primary:hover {
+    background-color: #003A7A;
+  }
+
+  .sim-btn-secondary {
+    background-color: #51AEE2;
+    color: white;
+    font-weight: 600;
+    padding: 0.5rem 1.25rem;
+    border-radius: 8px;
+    transition: background-color 0.2s;
+    border: none;
+    cursor: pointer;
+  }
+
+  .sim-btn-secondary:hover {
+    background-color: #3a9ed4;
+  }
+
+  .sim-btn-danger {
+    background-color: #E02020;
+    color: white;
+    font-weight: 600;
+    padding: 0.5rem 1.25rem;
+    border-radius: 8px;
+    transition: background-color 0.2s;
+    border: none;
+    cursor: pointer;
+  }
+
+  .sim-input {
+    width: 100%;
+    border: 1.5px solid #D1D9E6;
+    border-radius: 8px;
+    padding: 0.5rem 0.875rem;
+    font-size: 0.875rem;
+    color: #1A2B4A;
+    background: white;
+    transition: border-color 0.2s, box-shadow 0.2s;
+    outline: none;
+  }
+
+  .sim-input:focus {
+    border-color: #51AEE2;
+    box-shadow: 0 0 0 3px rgba(81, 174, 226, 0.15);
+  }
+
+  .sim-badge-paye {
+    background-color: #D1FAE5;
+    color: #065F46;
+    padding: 2px 10px;
+    border-radius: 999px;
+    font-size: 0.75rem;
+    font-weight: 600;
+  }
+
+  .sim-badge-impaye {
+    background-color: #FEE2E2;
+    color: #991B1B;
+    padding: 2px 10px;
+    border-radius: 999px;
+    font-size: 0.75rem;
+    font-weight: 600;
+  }
+
+  .sim-badge-attente {
+    background-color: #FEF3C7;
+    color: #92400E;
+    padding: 2px 10px;
+    border-radius: 999px;
+    font-size: 0.75rem;
+    font-weight: 600;
+  }
+
+  .sim-table th {
+    background-color: #EBF3FC;
+    color: #004B9C;
+    font-weight: 600;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding: 0.75rem 1rem;
+    text-align: left;
+  }
+
+  .sim-table td {
+    padding: 0.875rem 1rem;
+    font-size: 0.875rem;
+    color: #1A2B4A;
+    border-bottom: 1px solid #EBF3FC;
+  }
+
+  .sim-table tr:hover td {
+    background-color: #F0F7FF;
+  }
+
+  .sim-section-title {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: #004B9C;
+  }
+
+  .sim-label {
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: #1A2B4A;
+    margin-bottom: 4px;
+    display: block;
+  }
+}

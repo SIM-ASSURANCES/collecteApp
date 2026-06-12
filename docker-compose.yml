@@ -24,12 +24,6 @@ services:
     networks:
       - dokploy-network
     restart: unless-stopped
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.collectapp.rule=Host(`collecte.mysimassurances.com`)"
-      - "traefik.http.routers.collectapp.entrypoints=websecure"
-      - "traefik.http.routers.collectapp.tls.certresolver=letsencrypt"
-      - "traefik.http.services.collectapp.loadbalancer.server.port=80"
 
 networks:
   dokploy-network:

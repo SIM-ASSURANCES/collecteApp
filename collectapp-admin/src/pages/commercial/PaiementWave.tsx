@@ -7,6 +7,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { Smartphone, CheckCircle2, XCircle, Search, ArrowLeft, Loader2, RefreshCw } from 'lucide-react';
+import { QRCodeSVG } from 'qrcode.react';
 import toast from 'react-hot-toast';
 import api from '../../api/axios';
 import { addToOfflineQueue } from '../../hooks/usePendingSync';
@@ -35,6 +36,21 @@ export default function PaiementWave() {
     enabled: etape === 'selection',
   });
 
+  // Session Wave Checkout — créée à l'arrivée sur l'étape confirmation
+  const {
+    data: waveSession,
+    isLoading: sessionLoading,
+    isError: sessionError,
+    refetch: refetchSession,
+  } = useQuery<{ id: string; wave_launch_url: string; montant: number }>({
+    queryKey: ['wave-session', cotisant?.id],
+    queryFn: () =>
+      api.post('/paiements/wave/session', { cotisant_id: cotisant!.id }).then(r => r.data),
+    enabled: etape === 'confirmation' && !!cotisant && isOnline,
+    staleTime: Infinity,
+    retry: 1,
+  });
+
   const filtres = cotisants.filter(c =>
     c.actif &&
     (c.nom.toLowerCase().includes(searchText.toLowerCase()) || c.telephone.includes(searchText))
@@ -42,7 +58,7 @@ export default function PaiementWave() {
 
   // Mutation : enregistrer paiement Wave
   const paiementMutation = useMutation({
-    mutationFn: async (data: { cotisant_id: number; montant: number }) => {
+    mutationFn: async (data: { cotisant_id: number; montant: number; reference_wave?: string }) => {
       return api.post('/paiements', { ...data, mode: 'wave', statut: 'paye' });
     },
     onSuccess: () => {
@@ -60,7 +76,7 @@ export default function PaiementWave() {
   });
 
   // Confirmer le paiement (en ligne ou hors ligne)
-  const handleConfirmer = useCallback(() => {
+  const handleConfirmer = useCallback(async () => {
     if (!cotisant) return;
     setPolling(true);
 
@@ -76,8 +92,26 @@ export default function PaiementWave() {
       setPolling(false);
       return;
     }
-    paiementMutation.mutate({ cotisant_id: cotisant.id, montant: Number(cotisant.montant_journalier) });
-  }, [cotisant, isOnline, paiementMutation]);
+
+    // Vérifier le statut du paiement chez Wave avant d'enregistrer
+    if (waveSession) {
+      try {
+        const { data: st } = await api.get(`/paiements/wave/session/${waveSession.id}`);
+        if (st.payment_status !== 'succeeded') {
+          const force = window.confirm(
+            'Wave n\'a pas encore confirmé ce paiement.\nVoulez-vous quand même l\'enregistrer ?'
+          );
+          if (!force) { setPolling(false); return; }
+        }
+      } catch { /* Wave injoignable → confirmation manuelle autorisée */ }
+    }
+
+    paiementMutation.mutate({
+      cotisant_id: cotisant.id,
+      montant: Number(cotisant.montant_journalier),
+      reference_wave: waveSession?.id,
+    });
+  }, [cotisant, isOnline, paiementMutation, waveSession]);
 
   const handleSelectCotisant = (c: Cotisant) => {
     setCotisant(c);
@@ -145,8 +179,6 @@ export default function PaiementWave() {
   }
 
   if (etape === 'confirmation' && cotisant) {
-    // Générer un "QR code" SVG symbolique avec les infos de paiement
-    const qrData = `WAVE;${cotisant.telephone};${cotisant.montant_journalier};SIM`;
     return (
       <div className="p-4 space-y-5">
         <button onClick={() => setEtape('selection')}
@@ -170,7 +202,7 @@ export default function PaiementWave() {
           </p>
         </div>
 
-        {/* Affichage QR Wave (simulé) */}
+        {/* QR Wave réel (session Checkout) */}
         <div className="bg-white rounded-2xl p-6 flex flex-col items-center gap-4"
              style={{ boxShadow: '0 2px 8px rgba(0,75,156,0.08)' }}>
           <div className="flex items-center gap-2">
@@ -178,39 +210,44 @@ export default function PaiementWave() {
             <p className="font-semibold text-sm" style={{ color: '#004B9C' }}>Paiement Wave</p>
           </div>
 
-          {/* QR Code SVG symbolique */}
-          <div className="border-4 rounded-xl p-3" style={{ borderColor: '#004B9C' }}>
-            <svg width="160" height="160" viewBox="0 0 160 160" fill="none">
-              {/* Coin TL */}
-              <rect x="10" y="10" width="50" height="50" rx="4" fill="none" stroke="#004B9C" strokeWidth="4"/>
-              <rect x="20" y="20" width="30" height="30" rx="2" fill="#004B9C"/>
-              {/* Coin TR */}
-              <rect x="100" y="10" width="50" height="50" rx="4" fill="none" stroke="#004B9C" strokeWidth="4"/>
-              <rect x="110" y="20" width="30" height="30" rx="2" fill="#004B9C"/>
-              {/* Coin BL */}
-              <rect x="10" y="100" width="50" height="50" rx="4" fill="none" stroke="#004B9C" strokeWidth="4"/>
-              <rect x="20" y="110" width="30" height="30" rx="2" fill="#004B9C"/>
-              {/* Données simulées */}
-              {[70,80,90,100,110].map((y, i) => (
-                <rect key={y} x="70" y={y} width="8" height="8" rx="1" fill="#004B9C" opacity={0.5 + i * 0.1}/>
-              ))}
-              {[70,80,90,100,110].map((x, i) => (
-                <rect key={x} x={x} y="70" width="8" height="8" rx="1" fill="#004B9C" opacity={0.5 + i * 0.1}/>
-              ))}
-              {[85,95,105,115].map((x, i) => (
-                <rect key={x} x={x} y="85" width="6" height="6" rx="1" fill="#51AEE2" opacity={0.7 + i * 0.05}/>
-              ))}
-              {/* Logo Wave au centre */}
-              <circle cx="80" cy="80" r="12" fill="white"/>
-              <text x="80" y="85" textAnchor="middle" fill="#004B9C" fontSize="11" fontWeight="bold">W</text>
-            </svg>
-          </div>
+          {sessionLoading ? (
+            <div className="w-[176px] h-[176px] flex items-center justify-center">
+              <Loader2 size={36} className="animate-spin" style={{ color: '#004B9C' }} />
+            </div>
+          ) : waveSession ? (
+            <div className="border-4 rounded-xl p-3 bg-white" style={{ borderColor: '#004B9C' }}>
+              <QRCodeSVG value={waveSession.wave_launch_url} size={160} fgColor="#1B1B1B" level="M" />
+            </div>
+          ) : (
+            <div className="flex flex-col items-center gap-2">
+              <div className="w-[176px] h-[176px] border-4 rounded-xl flex flex-col items-center justify-center gap-2 text-center px-3"
+                   style={{ borderColor: '#E5E7EB' }}>
+                <XCircle size={32} className="text-gray-300" />
+                <p className="text-xs text-gray-400">
+                  {sessionError ? 'QR Wave indisponible — encaissez via le numéro' : 'Hors ligne — QR indisponible'}
+                </p>
+              </div>
+              {sessionError && isOnline && (
+                <button onClick={() => refetchSession()}
+                        className="flex items-center gap-1 text-xs font-medium" style={{ color: '#004B9C' }}>
+                  <RefreshCw size={12} /> Réessayer
+                </button>
+              )}
+            </div>
+          )}
 
           <div className="text-center">
-            <p className="text-sm text-gray-500">Numéro Wave du client</p>
+            <p className="text-sm text-gray-500">
+              {waveSession ? 'Le client scanne ce QR avec son app Wave' : 'Numéro Wave du client'}
+            </p>
             <p className="text-xl font-bold mt-1 font-mono" style={{ color: '#004B9C' }}>
               {cotisant.telephone}
             </p>
+            {waveSession && (
+              <p className="text-xs text-gray-400 mt-1">
+                Montant pré-rempli : {waveSession.montant.toLocaleString()} FCFA
+              </p>
+            )}
           </div>
 
           {!isOnline && (

@@ -2,7 +2,7 @@ version: '3.8'
 
 services:
   backend:
-    image: ghcr.io/sim-assurances/collectapp-backend:latest
+    image: ghcr.io/sim-assurances/collectapp-backend:v0
     environment:
       NODE_ENV: production
       PORT: 5000
@@ -18,7 +18,7 @@ services:
     restart: unless-stopped
 
   frontend:
-    image: ghcr.io/sim-assurances/collectapp-frontend:latest
+    image: ghcr.io/sim-assurances/collectapp-frontend:v0
     depends_on:
       - backend
     networks:

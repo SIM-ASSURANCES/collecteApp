@@ -12,6 +12,7 @@ import Commerciaux  from './pages/Commerciaux';
 import Reversements from './pages/Reversements';
 import Statistiques from './pages/Statistiques';
 import Relances     from './pages/Relances';
+import Utilisateurs from './pages/Utilisateurs';
 // ── Pages commercial ──
 import MaListe                from './pages/commercial/MaListe';
 import Paiement               from './pages/commercial/Paiement';
@@ -42,6 +43,7 @@ export default function App() {
             <Route path="reversements"  element={<Reversements />} />
             <Route path="statistiques"  element={<Statistiques />} />
             <Route path="relances"      element={<Relances />}     />
+            <Route path="utilisateurs"  element={<Utilisateurs />} />
           </Route>
 
           {/* ── Espace COMMERCIAL (mobile-first) ── */}

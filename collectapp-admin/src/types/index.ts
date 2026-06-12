@@ -1,7 +1,21 @@
+export type Role = 'ADMIN' | 'SUPERVISEUR' | 'COMMERCIAL';
+
 export interface User {
   id: number;
   nom: string;
-  role: 'ADMIN' | 'COMMERCIAL';
+  role: Role;
+  permissions: string[];
+}
+
+export interface UtilisateurAdmin {
+  id: number;
+  nom: string;
+  identifiant: string;
+  role: Role;
+  permissions: string[];
+  actif: boolean;
+  derniere_connexion: string | null;
+  created_at: string;
 }
 
 export interface Cotisant {

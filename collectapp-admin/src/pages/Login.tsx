@@ -1,6 +1,7 @@
 import { useState, FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
+import { firstAllowedPath } from '../lib/permissions';
 import api from '../api/axios';
 import toast from 'react-hot-toast';
 
@@ -17,11 +18,11 @@ export default function Login() {
     try {
       const { data } = await api.post('/auth/login', { identifiant, mot_de_passe: motDePasse });
       login(data.token, data.user);
-      // Redirection selon le rôle
+      // Redirection selon le rôle et les permissions
       if (data.user.role === 'COMMERCIAL') {
         navigate('/commercial');
       } else {
-        navigate('/');
+        navigate(firstAllowedPath(data.user));
       }
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { message?: string } } })

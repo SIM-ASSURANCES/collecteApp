@@ -45,14 +45,15 @@ exports.login = async (req, res, next) => {
       derniere_connexion: new Date(),
     });
 
+    const permissions = Array.isArray(user.permissions) ? user.permissions : [];
     const token = jwt.sign(
-      { id: user.id, role: user.role, nom: user.nom },
+      { id: user.id, role: user.role, nom: user.nom, permissions },
       process.env.JWT_SECRET,
       { expiresIn: process.env.JWT_EXPIRES_IN || '8h' }
     );
 
     logger.info(`Connexion réussie — utilisateur #${user.id} (${user.role})`);
-    res.json({ token, user: { id: user.id, nom: user.nom, role: user.role } });
+    res.json({ token, user: { id: user.id, nom: user.nom, role: user.role, permissions } });
   } catch (err) {
     next(err);
   }

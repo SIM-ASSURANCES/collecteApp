@@ -47,7 +47,7 @@ export default function CommercialLayout() {
   }, [isOnline, queryClient]);
 
   if (!isAuthenticated()) return <Navigate to="/login" replace />;
-  if (user?.role === 'ADMIN') return <Navigate to="/" replace />;
+  if (user?.role !== 'COMMERCIAL') return <Navigate to="/" replace />;
 
   const handleLogout = async () => {
     try { await api.post('/auth/logout'); } catch { /* silencieux */ }

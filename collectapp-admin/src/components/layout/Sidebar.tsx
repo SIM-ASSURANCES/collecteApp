@@ -1,21 +1,24 @@
 import { NavLink } from 'react-router-dom';
 import {
   LayoutDashboard, Users, UserCog, BarChart2,
-  AlertTriangle, LogOut, Wallet,
+  AlertTriangle, LogOut, Wallet, ShieldCheck,
 } from 'lucide-react';
 import { useAuthStore } from '../../store/authStore';
+import { hasPermission, type PermissionKey } from '../../lib/permissions';
 
-const links = [
-  { to: '/',             icon: LayoutDashboard, label: 'Tableau de bord' },
-  { to: '/cotisants',    icon: Users,            label: 'Cotisants'       },
-  { to: '/commerciaux',  icon: UserCog,          label: 'Commerciaux'     },
-  { to: '/reversements', icon: Wallet,           label: 'Reversements'    },
-  { to: '/statistiques', icon: BarChart2,        label: 'Statistiques'    },
-  { to: '/relances',     icon: AlertTriangle,    label: 'Relances'        },
+const allLinks: { to: string; icon: typeof Users; label: string; perm: PermissionKey }[] = [
+  { to: '/',             icon: LayoutDashboard, label: 'Tableau de bord', perm: 'dashboard'    },
+  { to: '/cotisants',    icon: Users,            label: 'Cotisants',       perm: 'cotisants'    },
+  { to: '/commerciaux',  icon: UserCog,          label: 'Commerciaux',     perm: 'commerciaux'  },
+  { to: '/reversements', icon: Wallet,           label: 'Reversements',    perm: 'reversements' },
+  { to: '/statistiques', icon: BarChart2,        label: 'Statistiques',    perm: 'statistiques' },
+  { to: '/relances',     icon: AlertTriangle,    label: 'Relances',        perm: 'relances'     },
+  { to: '/utilisateurs', icon: ShieldCheck,      label: 'Utilisateurs',    perm: 'utilisateurs' },
 ];
 
 export default function Sidebar() {
   const { user, logout } = useAuthStore();
+  const links = allLinks.filter(l => hasPermission(user, l.perm));
 
   return (
     <aside className="hidden md:flex flex-col w-60 min-h-screen" style={{ background: 'linear-gradient(180deg,#004B9C 0%,#003A7A 100%)' }}>

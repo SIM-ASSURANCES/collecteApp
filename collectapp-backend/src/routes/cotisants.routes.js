@@ -6,10 +6,10 @@ const authorize = require('../middlewares/authorize');
 
 router.use(auth);
 
-// Lecture accessible admin + commercial (le commercial voit seulement ses cotisants)
-router.get('/', authorize('ADMIN', 'COMMERCIAL'), ctrl.list);
-router.get('/search', authorize('ADMIN', 'COMMERCIAL'), ctrl.search);
-router.get('/:id', authorize('ADMIN', 'COMMERCIAL'), param('id').isInt(), ctrl.getOne);
+// Lecture accessible admin + superviseur + commercial (le commercial voit seulement ses cotisants)
+router.get('/', authorize('ADMIN', 'SUPERVISEUR', 'COMMERCIAL'), ctrl.list);
+router.get('/search', authorize('ADMIN', 'SUPERVISEUR', 'COMMERCIAL'), ctrl.search);
+router.get('/:id', authorize('ADMIN', 'SUPERVISEUR', 'COMMERCIAL'), param('id').isInt(), ctrl.getOne);
 
 router.post(
   '/',

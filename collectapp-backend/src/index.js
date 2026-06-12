@@ -25,6 +25,7 @@ app.use('/api/commerciaux',  require('./routes/commerciaux.routes'));
 app.use('/api/paiements',    require('./routes/paiements.routes'));
 app.use('/api/reversements', require('./routes/reversements.routes'));
 app.use('/api/stats',        require('./routes/stats.routes'));
+app.use('/api/utilisateurs', require('./routes/utilisateurs.routes'));
 
 // Santé
 app.get('/health', (req, res) => res.json({ status: 'ok', timestamp: new Date() }));

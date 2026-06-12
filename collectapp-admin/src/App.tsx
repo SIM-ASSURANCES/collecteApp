@@ -13,6 +13,9 @@ import Reversements from './pages/Reversements';
 import Statistiques from './pages/Statistiques';
 import Relances     from './pages/Relances';
 import Utilisateurs from './pages/Utilisateurs';
+// ── Pages publiques (redirections Wave) ──
+import PaiementOk     from './pages/PaiementOk';
+import PaiementErreur from './pages/PaiementErreur';
 // ── Pages commercial ──
 import MaListe                from './pages/commercial/MaListe';
 import Paiement               from './pages/commercial/Paiement';
@@ -34,6 +37,10 @@ export default function App() {
         }} />
         <Routes>
           <Route path="/login" element={<Login />} />
+
+          {/* ── Pages publiques — redirections après paiement Wave ── */}
+          <Route path="/paiement-ok"     element={<PaiementOk />}     />
+          <Route path="/paiement-erreur" element={<PaiementErreur />} />
 
           {/* ── Espace ADMIN ── */}
           <Route element={<AppLayout />}>

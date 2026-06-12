@@ -9,7 +9,6 @@ services:
       JWT_EXPIRES_IN: 24h
       CORS_ORIGIN: https://collecte.mysimassurances.com
     networks:
-      - app-network
       - dokploy-network
     restart: unless-stopped
 
@@ -18,12 +17,9 @@ services:
     depends_on:
       - collecte-backend
     networks:
-      - app-network
       - dokploy-network
     restart: unless-stopped
 
 networks:
-  app-network:
-    driver: overlay
   dokploy-network:
     external: true

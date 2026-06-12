@@ -24,6 +24,6 @@ services:
 
 networks:
   app-network:
-    driver: bridge
+    driver: overlay
   dokploy-network:
     external: true

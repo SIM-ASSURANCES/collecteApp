@@ -7,4 +7,4 @@ RUN npm install --omit=dev
 COPY . .
 
 EXPOSE 5000
-CMD ["sh", "-c", "node -e \"const knex=require('knex')(require('./knexfile')[process.env.NODE_ENV||'production']); knex.migrate.latest().then(()=>{console.log('Migrations OK'); process.exit(0)}).catch(e=>{console.error(e); process.exit(1)})\" && node src/index.js"]
+CMD ["sh", "-c", "node db/bootstrap.js && node src/index.js"]

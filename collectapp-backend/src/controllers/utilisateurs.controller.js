@@ -8,7 +8,8 @@ const PERMISSIONS_VALIDES = [
   'statistiques', 'relances', 'utilisateurs',
 ];
 
-const ROLES_VALIDES = ['ADMIN', 'SUPERVISEUR', 'COMMERCIAL'];
+// Les commerciaux sont gérés via /api/commerciaux (page dédiée)
+const ROLES_VALIDES = ['ADMIN', 'SUPERVISEUR'];
 
 const champsPublics = [
   'id', 'nom', 'identifiant', 'role', 'permissions', 'actif', 'derniere_connexion', 'created_at',
@@ -33,6 +34,7 @@ async function estDernierAdminActif(id) {
 exports.list = async (req, res, next) => {
   try {
     const utilisateurs = await db('utilisateurs')
+      .whereIn('role', ROLES_VALIDES)
       .select(champsPublics)
       .orderBy('created_at', 'desc');
     res.json(utilisateurs);

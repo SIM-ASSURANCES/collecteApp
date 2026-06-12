@@ -171,8 +171,6 @@ export default function Utilisateurs() {
                     <td className="px-5 py-3.5">
                       {u.role === 'ADMIN' ? (
                         <span className="text-xs text-gray-400">Toutes</span>
-                      ) : u.role === 'COMMERCIAL' ? (
-                        <span className="text-xs text-gray-400">Espace collecte</span>
                       ) : (
                         <div className="flex flex-wrap gap-1 max-w-[260px]">
                           {(u.permissions ?? []).map(p => (
@@ -252,8 +250,8 @@ export default function Utilisateurs() {
 
           <div>
             <label className="sim-label">Rôle</label>
-            <div className="grid grid-cols-3 gap-2">
-              {(['ADMIN', 'SUPERVISEUR', 'COMMERCIAL'] as Role[]).map(r => (
+            <div className="grid grid-cols-2 gap-2">
+              {(['ADMIN', 'SUPERVISEUR'] as Role[]).map(r => (
                 <button key={r} type="button"
                         onClick={() => setForm(f => ({ ...f, role: r }))}
                         className="px-3 py-2.5 rounded-xl text-xs font-semibold border-2 transition"
@@ -267,7 +265,9 @@ export default function Utilisateurs() {
             <p className="text-[11px] text-gray-400 mt-1.5">
               {form.role === 'ADMIN' && 'Accès complet à toutes les fonctionnalités, y compris la gestion des utilisateurs.'}
               {form.role === 'SUPERVISEUR' && 'Accès à l\'espace admin limité aux pages cochées ci-dessous.'}
-              {form.role === 'COMMERCIAL' && 'Accès à l\'espace collecte terrain (mobile et web).'}
+            </p>
+            <p className="text-[11px] text-gray-400 mt-1">
+              Les comptes commerciaux se créent depuis la page « Commerciaux ».
             </p>
           </div>
 

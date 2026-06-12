@@ -15,7 +15,7 @@ router.post(
     body('nom').trim().notEmpty(),
     body('identifiant').trim().isLength({ min: 3 }),
     body('mot_de_passe').isLength({ min: 6 }),
-    body('role').isIn(['ADMIN', 'SUPERVISEUR', 'COMMERCIAL']),
+    body('role').isIn(['ADMIN', 'SUPERVISEUR']),
   ],
   ctrl.create
 );

@@ -44,6 +44,61 @@ exports.enregistrerManuel = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
+// ── Wave Checkout API ──
+const WAVE_API = 'https://api.wave.com/v1/checkout/sessions';
+
+// Créer une session de paiement Wave → retourne l'URL à encoder en QR
+exports.creerSessionWave = async (req, res, next) => {
+  try {
+    if (!process.env.WAVE_API_KEY) {
+      return res.status(503).json({ message: 'Clé API Wave non configurée.', code: 'WAVE_NON_CONFIGURE' });
+    }
+    const { cotisant_id } = req.body;
+    const cotisant = await db('cotisants').where({ id: cotisant_id, actif: true }).first();
+    if (!cotisant) return res.status(404).json({ message: 'Cotisant introuvable.' });
+
+    const montant = Math.round(Number(cotisant.montant_journalier));
+    const waveResp = await fetch(WAVE_API, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${process.env.WAVE_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        amount: String(montant),
+        currency: 'XOF',
+        client_reference: `cotisant-${cotisant.id}-${today()}`,
+        success_url: 'https://collecte.mysimassurances.com/paiement-ok',
+        error_url: 'https://collecte.mysimassurances.com/paiement-erreur',
+      }),
+    });
+    const data = await waveResp.json();
+    if (!waveResp.ok) {
+      logger.error(`Wave API ${waveResp.status} : ${JSON.stringify(data)}`);
+      return res.status(502).json({ message: 'Erreur API Wave.', detail: data });
+    }
+    logger.info(`Session Wave ${data.id} créée — cotisant #${cotisant.id} (${montant} XOF)`);
+    res.status(201).json({ id: data.id, wave_launch_url: data.wave_launch_url, montant });
+  } catch (err) { next(err); }
+};
+
+// Vérifier le statut d'une session Wave (succeeded / processing / cancelled)
+exports.statutSessionWave = async (req, res, next) => {
+  try {
+    if (!process.env.WAVE_API_KEY) {
+      return res.status(503).json({ message: 'Clé API Wave non configurée.', code: 'WAVE_NON_CONFIGURE' });
+    }
+    const waveResp = await fetch(`${WAVE_API}/${encodeURIComponent(req.params.id)}`, {
+      headers: { Authorization: `Bearer ${process.env.WAVE_API_KEY}` },
+    });
+    const data = await waveResp.json();
+    if (!waveResp.ok) {
+      return res.status(502).json({ message: 'Erreur API Wave.', detail: data });
+    }
+    res.json({ id: data.id, checkout_status: data.checkout_status, payment_status: data.payment_status });
+  } catch (err) { next(err); }
+};
+
 exports.webhookWave = async (req, res, next) => {
   try {
     const { telephone, montant, reference } = req.body;
@@ -107,7 +162,7 @@ exports.todaySommaire = async (req, res, next) => {
 
 // Enregistrement paiement (Wave ou Manuel) depuis l'espace commercial
 exports.enregistrer = async (req, res, next) => {
-  const { cotisant_id, montant, mode, statut = 'paye' } = req.body;
+  const { cotisant_id, montant, mode, statut = 'paye', reference_wave } = req.body;
   if (!cotisant_id || !montant || !mode) {
     return res.status(400).json({ message: 'cotisant_id, montant et mode sont obligatoires.' });
   }
@@ -126,6 +181,7 @@ exports.enregistrer = async (req, res, next) => {
         montant,
         mode,
         statut,
+        reference_wave: reference_wave || null,
         horodatage: new Date(),
       })
       .returning('*');

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 
 import '../../core/api/api_client.dart';
 import '../../core/storage/offline_queue.dart';
@@ -25,22 +26,76 @@ class _PaiementWaveScreenState extends ConsumerState<PaiementWaveScreen> {
   bool _doublon = false;
   bool _offline = false;
 
+  // Session Wave Checkout (QR réel)
+  Map<String, dynamic>? _session;
+  bool _sessionLoading = false;
+  String? _sessionError;
+
   @override
   void initState() {
     super.initState();
     _cotisant = widget.cotisant;
+    if (_cotisant != null) _creerSession();
+  }
+
+  Future<void> _creerSession() async {
+    if (_cotisant == null) return;
+    setState(() { _sessionLoading = true; _session = null; _sessionError = null; });
+    try {
+      final dio  = ref.read(dioProvider);
+      final resp = await dio.post('/paiements/wave/session',
+          data: {'cotisant_id': _cotisant!['id']});
+      if (!mounted) return;
+      setState(() {
+        _session = Map<String, dynamic>.from(resp.data as Map);
+        _sessionLoading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _sessionError = 'QR Wave indisponible — encaissez via le numéro';
+        _sessionLoading = false;
+      });
+    }
   }
 
   Future<void> _confirmer() async {
     if (_cotisant == null) return;
     setState(() => _loading = true);
+    final dio = ref.read(dioProvider);
+
+    // Vérifier le statut du paiement chez Wave avant d'enregistrer
+    if (_session != null) {
+      try {
+        final st = await dio.get('/paiements/wave/session/${_session!['id']}');
+        if (st.data['payment_status'] != 'succeeded' && mounted) {
+          final force = await showDialog<bool>(
+            context: context,
+            builder: (ctx) => AlertDialog(
+              title: const Text('Paiement non détecté'),
+              content: const Text(
+                  'Wave n\'a pas encore confirmé ce paiement. Voulez-vous quand même l\'enregistrer ?'),
+              actions: [
+                TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Annuler')),
+                TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Enregistrer quand même')),
+              ],
+            ),
+          );
+          if (force != true) {
+            setState(() => _loading = false);
+            return;
+          }
+        }
+      } catch (_) {/* Wave injoignable → on laisse le commercial confirmer manuellement */}
+    }
+
     try {
-      final dio = ref.read(dioProvider);
       await dio.post('/paiements', data: {
         'cotisant_id': _cotisant!['id'],
         'montant':     _cotisant!['montant_journalier'],
         'mode':        'wave',
         'statut':      'paye',
+        if (_session != null) 'reference_wave': _session!['id'],
       });
       ref.invalidate(maListeProvider);
       setState(() { _succes = true; _loading = false; });
@@ -76,7 +131,10 @@ class _PaiementWaveScreenState extends ConsumerState<PaiementWaveScreen> {
 
     // Sélection si pas de cotisant pré-sélectionné
     if (_cotisant == null) {
-      return CotisantSelector(onSelected: (c) => setState(() => _cotisant = c));
+      return CotisantSelector(onSelected: (c) {
+        setState(() => _cotisant = c);
+        _creerSession();
+      });
     }
 
     // Écran principal Wave
@@ -115,15 +173,50 @@ class _PaiementWaveScreenState extends ConsumerState<PaiementWaveScreen> {
                 const Text('Paiement Wave', style: TextStyle(fontWeight: FontWeight.w700, color: SimColors.blue)),
               ]),
               const SizedBox(height: 20),
-              // QR Code symbolique
-              Container(
-                width: 180, height: 180,
-                decoration: BoxDecoration(
-                  border: Border.all(color: SimColors.blue, width: 4),
-                  borderRadius: BorderRadius.circular(12),
+              // QR Code Wave réel (session Checkout)
+              if (_sessionLoading)
+                const SizedBox(
+                  width: 180, height: 180,
+                  child: Center(child: CircularProgressIndicator(color: SimColors.blue)),
+                )
+              else if (_session != null)
+                Container(
+                  width: 196, height: 196,
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    border: Border.all(color: SimColors.blue, width: 4),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: QrImageView(
+                    data: _session!['wave_launch_url'] as String,
+                    version: QrVersions.auto,
+                    backgroundColor: Colors.white,
+                  ),
+                )
+              else ...[
+                Container(
+                  width: 180, height: 180,
+                  decoration: BoxDecoration(
+                    border: Border.all(color: SimColors.blue, width: 4),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: CustomPaint(painter: _QrPainter()),
                 ),
-                child: CustomPaint(painter: _QrPainter()),
-              ),
+                if (_sessionError != null) ...[
+                  const SizedBox(height: 8),
+                  Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                    const Icon(Icons.info_outline, color: SimColors.warning, size: 14),
+                    const SizedBox(width: 4),
+                    Flexible(child: Text(_sessionError!,
+                        style: const TextStyle(color: SimColors.warning, fontSize: 11))),
+                  ]),
+                  TextButton.icon(
+                    onPressed: _creerSession,
+                    icon: const Icon(Icons.refresh, size: 14),
+                    label: const Text('Réessayer', style: TextStyle(fontSize: 12)),
+                  ),
+                ],
+              ],
               const SizedBox(height: 16),
               const Text('Numéro Wave du client',
                   style: TextStyle(color: SimColors.textSecondary, fontSize: 12)),

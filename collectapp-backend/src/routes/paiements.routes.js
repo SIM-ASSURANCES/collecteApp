@@ -10,6 +10,15 @@ router.post('/webhook/wave', ctrl.webhookWave);
 // Routes protégées
 router.use(auth);
 
+// Session Wave Checkout (QR réel) — création + vérification de statut
+router.post(
+  '/wave/session',
+  authorize('COMMERCIAL', 'ADMIN'),
+  [body('cotisant_id').isInt()],
+  ctrl.creerSessionWave
+);
+router.get('/wave/session/:id', authorize('COMMERCIAL', 'ADMIN'), ctrl.statutSessionWave);
+
 // Enregistrement paiement (Wave ou Manuel) depuis espace commercial — route générique
 router.post(
   '/',

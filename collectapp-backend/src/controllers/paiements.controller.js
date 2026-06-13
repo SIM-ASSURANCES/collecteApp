@@ -150,16 +150,29 @@ exports.today = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
-// Sommaire des paiements du jour pour un commercial (montant total + nombre)
+// Sommaire des paiements du jour : total espèces (à reverser) + total Wave (déjà encaissé)
 exports.todaySommaire = async (req, res, next) => {
   try {
-    let query = db('paiements').where({ date: today(), statut: 'paye' });
-    if (req.user.role === 'COMMERCIAL') query = query.where({ commercial_id: req.user.id });
-    const [row] = await query.count('id as nombre_paiements').sum('montant as total_encaisse');
+    const base = () => {
+      let q = db('paiements').where({ date: today(), statut: 'paye' });
+      if (req.user.role === 'COMMERCIAL') q = q.where({ commercial_id: req.user.id });
+      return q;
+    };
+
+    const [tout]     = await base().count('id as n').sum('montant as s');
+    const [especes]  = await base().where('mode', 'especes').count('id as n').sum('montant as s');
+    const [wave]     = await base().where('mode', 'wave').count('id as n').sum('montant as s');
+
+    const total_especes = parseFloat(especes.s) || 0;
     res.json({
       date: today(),
-      nombre_paiements: parseInt(row.nombre_paiements, 10) || 0,
-      total_encaisse: parseFloat(row.total_encaisse) || 0,
+      nombre_paiements: parseInt(tout.n, 10) || 0,
+      total_encaisse: parseFloat(tout.s) || 0,
+      // total_especes = montant physique à reverser ; le Wave va déjà sur le compte SIM
+      total_especes,
+      nombre_especes: parseInt(especes.n, 10) || 0,
+      total_wave: parseFloat(wave.s) || 0,
+      nombre_wave: parseInt(wave.n, 10) || 0,
     });
   } catch (err) { next(err); }
 };

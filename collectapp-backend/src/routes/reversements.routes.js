@@ -17,6 +17,9 @@ router.post(
 // Commercial vÃ©rifie si un reversement a dÃ©jÃ  Ã©tÃ© soumis aujourd'hui
 router.get('/today', authorize('COMMERCIAL'), ctrl.todayReversement);
 
+// Historique des reversements du commercial connecte
+router.get('/mes', authorize('COMMERCIAL'), ctrl.mesReversements);
+
 // Admin consulte tous les reversements
 router.get('/', authorize('ADMIN', 'SUPERVISEUR'), ctrl.list);
 

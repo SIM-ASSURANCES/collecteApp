@@ -2,18 +2,27 @@ const { validationResult } = require('express-validator');
 const db = require('../config/db');
 const logger = require('../config/logger');
 
-const today = () => new Date().toISOString().slice(0, 10);
+// Date du jour au fuseau de la Côte d'Ivoire (Africa/Abidjan, UTC+0)
+const today = () =>
+  new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Abidjan' }).format(new Date());
 
 exports.declarer = async (req, res, next) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
 
-  const { montant_declare } = req.body;
+  const { montant_declare, numero_wave } = req.body;
   try {
-    // Calcul du montant attendu = somme des paiements manuels du jour
-    const { sum } = await db('paiements')
+    // Un seul reversement par jour
+    const existant = await db('reversements')
       .where({ commercial_id: req.user.id, date: today() })
-      .whereIn('mode', ['especes', 'cheque', 'autre'])
+      .first();
+    if (existant) {
+      return res.status(409).json({ message: 'Un reversement a déjà été soumis aujourd\'hui.' });
+    }
+
+    // Montant attendu = espèces uniquement (le Wave est déjà encaissé sur le compte SIM)
+    const { sum } = await db('paiements')
+      .where({ commercial_id: req.user.id, date: today(), mode: 'especes' })
       .sum('montant as sum')
       .first();
 
@@ -27,6 +36,7 @@ exports.declarer = async (req, res, next) => {
         montant_declare,
         montant_attendu,
         ecart,
+        numero_wave: numero_wave || null,
         statut: 'en_attente',
         horodatage: new Date(),
       })
@@ -35,8 +45,20 @@ exports.declarer = async (req, res, next) => {
     if (ecart > 0) {
       logger.warn(`Reversement partiel #${reversement.id} — écart de ${ecart} FCFA`);
     }
-    logger.info(`Reversement #${reversement.id} déclaré par commercial #${req.user.id}`);
+    logger.info(`Reversement #${reversement.id} déclaré par commercial #${req.user.id} (Wave ${numero_wave || '—'})`);
     res.status(201).json(reversement);
+  } catch (err) { next(err); }
+};
+
+// Historique des reversements du commercial connecté
+exports.mesReversements = async (req, res, next) => {
+  try {
+    const reversements = await db('reversements')
+      .where({ commercial_id: req.user.id })
+      .orderBy('date', 'desc')
+      .orderBy('horodatage', 'desc')
+      .limit(60);
+    res.json(reversements);
   } catch (err) { next(err); }
 };
 

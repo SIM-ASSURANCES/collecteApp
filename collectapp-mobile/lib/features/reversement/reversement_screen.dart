@@ -18,6 +18,12 @@ final reversementTodayProvider = FutureProvider<Map<String, dynamic>?>((ref) asy
   } catch (_) { return null; }
 });
 
+final mesReversementsProvider = FutureProvider<List<Map<String, dynamic>>>((ref) async {
+  final dio  = ref.read(dioProvider);
+  final resp = await dio.get('/reversements/mes');
+  return (resp.data as List).map((e) => Map<String, dynamic>.from(e as Map)).toList();
+});
+
 class ReversementScreen extends ConsumerStatefulWidget {
   const ReversementScreen({super.key});
 
@@ -27,16 +33,19 @@ class ReversementScreen extends ConsumerStatefulWidget {
 
 class _ReversementScreenState extends ConsumerState<ReversementScreen> {
   final _ctrl     = TextEditingController();
+  final _waveCtrl = TextEditingController();
   bool _confirme  = false;
   bool _soumis    = false;
   bool _loading   = false;
+  bool _historique = false;
   Map<String, dynamic>? _result;
 
   @override
-  void dispose() { _ctrl.dispose(); super.dispose(); }
+  void dispose() { _ctrl.dispose(); _waveCtrl.dispose(); super.dispose(); }
 
   Future<void> _soumettre(double montantAttendu) async {
     final declare = double.tryParse(_ctrl.text) ?? 0;
+    final wave    = _waveCtrl.text.trim();
     if (declare <= 0) return;
     setState(() => _loading = true);
     try {
@@ -44,7 +53,9 @@ class _ReversementScreenState extends ConsumerState<ReversementScreen> {
       final resp = await dio.post('/reversements', data: {
         'montant_declare': declare,
         'montant_attendu': montantAttendu,
+        'numero_wave': wave,
       });
+      ref.invalidate(mesReversementsProvider);
       setState(() { _result = Map<String, dynamic>.from(resp.data as Map); _soumis = true; _loading = false; });
     } catch (e) {
       setState(() => _loading = false);
@@ -63,10 +74,19 @@ class _ReversementScreenState extends ConsumerState<ReversementScreen> {
       appBar: AppBar(
         title: const Text('Reversement'),
         automaticallyImplyLeading: false,
+        actions: [
+          IconButton(
+            icon: Icon(_historique ? Icons.add_circle_outline : Icons.history, color: Colors.white),
+            tooltip: _historique ? 'Nouveau' : 'Historique',
+            onPressed: () => setState(() => _historique = !_historique),
+          ),
+        ],
         flexibleSpace: Container(decoration: const BoxDecoration(
             gradient: LinearGradient(colors: [SimColors.blue, SimColors.blueMid]))),
       ),
-      body: revToday.when(
+      body: _historique
+        ? _HistoriqueListe()
+        : revToday.when(
         loading: () => const Center(child: CircularProgressIndicator(color: SimColors.blue)),
         error: (_, __) => const Center(child: Text('Erreur')),
         data: (existant) {
@@ -77,12 +97,13 @@ class _ReversementScreenState extends ConsumerState<ReversementScreen> {
             loading: () => const Center(child: CircularProgressIndicator(color: SimColors.blue)),
             error: (_, __) => const Center(child: Text('Erreur chargement sommaire')),
             data: (s) {
-              final attendu = (s['total_encaisse'] as num).toDouble();
+              final attendu = ((s['total_especes'] ?? s['total_encaisse']) as num).toDouble();
               final declare = double.tryParse(_ctrl.text) ?? 0;
               final ecart   = declare - attendu;
 
               if (_confirme) return _EtapeConfirmation(
                 attendu: attendu, declare: declare, ecart: ecart, loading: _loading,
+                numeroWave: _waveCtrl.text.trim(),
                 onModifier: () => setState(() => _confirme = false),
                 onSoumettre: () => _soumettre(attendu),
               );
@@ -99,13 +120,15 @@ class _ReversementScreenState extends ConsumerState<ReversementScreen> {
                       borderRadius: BorderRadius.circular(18),
                     ),
                     child: Column(children: [
-                      const Text('Paiements collectés aujourd\'hui',
+                      const Text('Espèces collectées aujourd\'hui',
                           style: TextStyle(color: Colors.white70, fontSize: 13)),
                       const SizedBox(height: 6),
                       Text('${attendu.toStringAsFixed(0)} FCFA',
                           style: const TextStyle(color: Colors.white, fontSize: 30, fontWeight: FontWeight.w700)),
-                      Text('${s['nombre_paiements']} paiement(s)',
-                          style: const TextStyle(color: Colors.white60, fontSize: 12)),
+                      Text('${s['nombre_especes'] ?? s['nombre_paiements']} paiement(s) espèces'
+                          '${(s['total_wave'] ?? 0) > 0 ? ' · ${(s['total_wave'] as num).toStringAsFixed(0)} F Wave déjà encaissé' : ''}',
+                          style: const TextStyle(color: Colors.white60, fontSize: 11),
+                          textAlign: TextAlign.center),
                     ]),
                   ),
                   const SizedBox(height: 20),
@@ -152,6 +175,21 @@ class _ReversementScreenState extends ConsumerState<ReversementScreen> {
                           ]),
                         ),
                       ),
+                      const SizedBox(height: 18),
+                      const Text('Votre numéro Wave (chargé du montant)',
+                          style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                      const SizedBox(height: 8),
+                      TextField(
+                        controller: _waveCtrl,
+                        keyboardType: TextInputType.phone,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: SimColors.blue),
+                        decoration: const InputDecoration(
+                          prefixIcon: Icon(Icons.smartphone, color: SimColors.blue, size: 18),
+                          hintText: '07 00 00 00 00',
+                        ),
+                        onChanged: (_) => setState(() {}),
+                      ),
                       if (declare > 0 && attendu > 0) ...[
                         const SizedBox(height: 12),
                         _EcartBadge(ecart: ecart),
@@ -161,7 +199,9 @@ class _ReversementScreenState extends ConsumerState<ReversementScreen> {
                   const SizedBox(height: 24),
 
                   ElevatedButton(
-                    onPressed: declare > 0 ? () => setState(() => _confirme = true) : null,
+                    onPressed: (declare > 0 && _waveCtrl.text.trim().length >= 8)
+                        ? () => setState(() => _confirme = true)
+                        : null,
                     child: const Text('Continuer vers la confirmation'),
                   ),
                 ]),
@@ -177,9 +217,10 @@ class _ReversementScreenState extends ConsumerState<ReversementScreen> {
 class _EtapeConfirmation extends StatelessWidget {
   final double attendu, declare, ecart;
   final bool loading;
+  final String numeroWave;
   final VoidCallback onModifier, onSoumettre;
   const _EtapeConfirmation({required this.attendu, required this.declare, required this.ecart,
-      required this.loading, required this.onModifier, required this.onSoumettre});
+      required this.loading, required this.numeroWave, required this.onModifier, required this.onSoumettre});
 
   @override
   Widget build(BuildContext context) => Padding(
@@ -213,6 +254,19 @@ class _EtapeConfirmation extends StatelessWidget {
               style: const TextStyle(color: Colors.white, fontSize: 28, fontWeight: FontWeight.w700)),
         ]),
       ),
+      if (numeroWave.isNotEmpty) ...[
+        const SizedBox(height: 12),
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(color: SimColors.blueTint, borderRadius: BorderRadius.circular(12)),
+          child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+            const Icon(Icons.smartphone, color: SimColors.blue, size: 16),
+            const SizedBox(width: 8),
+            const Text('Reversé via Wave : ', style: TextStyle(color: SimColors.textSecondary, fontSize: 13)),
+            Text(numeroWave, style: const TextStyle(color: SimColors.blue, fontWeight: FontWeight.w700, fontSize: 13)),
+          ]),
+        ),
+      ],
       const Spacer(),
       Row(children: [
         Expanded(child: OutlinedButton(
@@ -268,6 +322,66 @@ class _SuccesReversement extends StatelessWidget {
       ),
     ]),
   );
+}
+
+class _HistoriqueListe extends ConsumerWidget {
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final async = ref.watch(mesReversementsProvider);
+    return async.when(
+      loading: () => const Center(child: CircularProgressIndicator(color: SimColors.blue)),
+      error: (_, __) => const Center(child: Text('Erreur de chargement')),
+      data: (liste) {
+        if (liste.isEmpty) {
+          return const Center(child: Text('Aucun reversement enregistré',
+              style: TextStyle(color: SimColors.textSecondary)));
+        }
+        return RefreshIndicator(
+          color: SimColors.blue,
+          onRefresh: () => ref.refresh(mesReversementsProvider.future),
+          child: ListView.builder(
+            padding: const EdgeInsets.all(16),
+            itemCount: liste.length,
+            itemBuilder: (ctx, i) {
+              final r = liste[i];
+              final date = DateTime.tryParse(r['date'].toString())?.toLocal();
+              final dateStr = date != null
+                  ? '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}'
+                  : '';
+              return Container(
+                margin: const EdgeInsets.only(bottom: 8),
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14),
+                    boxShadow: [BoxShadow(color: SimColors.blue.withValues(alpha: 0.06), blurRadius: 6)]),
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                    Text(dateStr, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+                    _StatutBadge(statut: r['statut'] as String),
+                  ]),
+                  const SizedBox(height: 8),
+                  Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                    Text('${(r['montant_declare'] as num).toStringAsFixed(0)} F',
+                        style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: SimColors.blue)),
+                    Text('Attendu : ${(r['montant_attendu'] as num).toStringAsFixed(0)} F',
+                        style: const TextStyle(fontSize: 11, color: SimColors.textSecondary)),
+                  ]),
+                  if (r['numero_wave'] != null && (r['numero_wave'] as String).isNotEmpty) ...[
+                    const SizedBox(height: 6),
+                    Row(children: [
+                      const Icon(Icons.smartphone, size: 12, color: SimColors.textSecondary),
+                      const SizedBox(width: 4),
+                      Text(r['numero_wave'] as String,
+                          style: const TextStyle(fontSize: 11, color: SimColors.textSecondary, fontFamily: 'monospace')),
+                    ]),
+                  ],
+                ]),
+              );
+            },
+          ),
+        );
+      },
+    );
+  }
 }
 
 class _DejaSubmis extends StatelessWidget {

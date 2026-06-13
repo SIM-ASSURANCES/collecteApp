@@ -259,7 +259,7 @@ class _CotisantTile extends StatelessWidget {
               Text(cotisant['nom'] as String, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
               Text(cotisant['telephone'] as String, style: const TextStyle(color: SimColors.textSecondary, fontSize: 12, fontFamily: 'monospace')),
               if (paye && cotisant['heure_paiement'] != null)
-                Text('✓ Payé · ${cotisant['mode_paiement']}',
+                Text('✓ Payé · ${cotisant['mode_paiement']} · ${_dateHeure(cotisant['heure_paiement'])}',
                     style: const TextStyle(color: SimColors.success, fontSize: 11, fontWeight: FontWeight.w500)),
             ]),
           ),
@@ -283,5 +283,15 @@ class _CotisantTile extends StatelessWidget {
     final n = double.tryParse(v.toString()) ?? 0;
     return n.toStringAsFixed(0).replaceAllMapped(
         RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]} ');
+  }
+
+  String _dateHeure(dynamic iso) {
+    final dt = DateTime.tryParse(iso.toString())?.toLocal();
+    if (dt == null) return '';
+    final d = dt.day.toString().padLeft(2, '0');
+    final mo = dt.month.toString().padLeft(2, '0');
+    final h = dt.hour.toString().padLeft(2, '0');
+    final mi = dt.minute.toString().padLeft(2, '0');
+    return '$d/$mo à ${h}h$mi';
   }
 }

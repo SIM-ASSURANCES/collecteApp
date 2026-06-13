@@ -3,7 +3,11 @@ const db = require('../config/db');
 const logger = require('../config/logger');
 const sseClients = require('../utils/sseClients');
 
-const today = () => new Date().toISOString().slice(0, 10);
+// Date du jour au fuseau de la Côte d'Ivoire (Africa/Abidjan, UTC+0).
+// Le statut « payé » est recalculé chaque jour : un paiement n'est « du jour »
+// que si sa date == aujourd'hui, donc tout repasse en impayé à minuit local.
+const today = () =>
+  new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Abidjan' }).format(new Date());
 
 // Vérification anti-doublon
 async function dejaPayeAujourdhui(cotisant_id, date = today()) {

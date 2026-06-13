@@ -30,7 +30,7 @@ export default function MaListe() {
         return {
           ...c,
           paye_aujourd_hui: !!p,
-          heure_paiement: p ? new Date(p.horodatage).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : undefined,
+          heure_paiement: p ? new Date(p.horodatage).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : undefined,
           mode_paiement: p?.mode,
         };
       });
@@ -142,7 +142,7 @@ export default function MaListe() {
                 <p className="text-xs text-gray-400 font-mono">{c.telephone}</p>
                 {c.paye_aujourd_hui && c.heure_paiement && (
                   <p className="text-xs mt-0.5 font-medium" style={{ color: '#059669' }}>
-                    ✓ Payé à {c.heure_paiement} · {c.mode_paiement}
+                    ✓ Payé · {c.mode_paiement} · {c.heure_paiement}
                   </p>
                 )}
               </div>

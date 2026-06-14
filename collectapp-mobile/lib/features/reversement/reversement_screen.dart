@@ -5,6 +5,9 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../core/api/api_client.dart';
 import '../../core/theme/app_theme.dart';
 
+// PostgreSQL renvoie les decimals comme chaînes ("500.00") → parsing sûr
+double _money(dynamic v) => double.tryParse(v?.toString() ?? '') ?? 0;
+
 final sommairePaiementsProvider = FutureProvider<Map<String, dynamic>>((ref) async {
   final dio  = ref.read(dioProvider);
   final resp = await dio.get('/paiements/today/sommaire');
@@ -121,7 +124,7 @@ class _ReversementScreenState extends ConsumerState<ReversementScreen> {
             loading: () => const Center(child: CircularProgressIndicator(color: SimColors.blue)),
             error: (_, __) => const Center(child: Text('Erreur chargement sommaire')),
             data: (s) {
-              final attendu = ((s['total_especes'] ?? s['total_encaisse']) as num).toDouble();
+              final attendu = _money(s['total_especes'] ?? s['total_encaisse']);
               final declare = double.tryParse(_ctrl.text) ?? 0;
               final ecart   = declare - attendu;
 
@@ -152,7 +155,7 @@ class _ReversementScreenState extends ConsumerState<ReversementScreen> {
                       Text('${attendu.toStringAsFixed(0)} FCFA',
                           style: const TextStyle(color: Colors.white, fontSize: 30, fontWeight: FontWeight.w700)),
                       Text('${s['nombre_especes'] ?? s['nombre_paiements']} paiement(s) espèces'
-                          '${(s['total_wave'] ?? 0) > 0 ? ' · ${(s['total_wave'] as num).toStringAsFixed(0)} F Wave déjà encaissé' : ''}',
+                          '${_money(s['total_wave']) > 0 ? ' · ${_money(s['total_wave']).toStringAsFixed(0)} F Wave déjà encaissé' : ''}',
                           style: const TextStyle(color: Colors.white60, fontSize: 11),
                           textAlign: TextAlign.center),
                     ]),
@@ -363,12 +366,12 @@ class _SuccesReversement extends StatelessWidget {
             boxShadow: [BoxShadow(color: SimColors.blue.withValues(alpha: 0.06), blurRadius: 8)]),
         child: Column(children: [
           Row(children: [
-            Expanded(child: _AmountCard('Attendu', (result['montant_attendu'] as num).toDouble(), SimColors.blue, SimColors.blueTint)),
+            Expanded(child: _AmountCard('Attendu', _money(result['montant_attendu']), SimColors.blue, SimColors.blueTint)),
             const SizedBox(width: 10),
-            Expanded(child: _AmountCard('Déclaré', (result['montant_declare'] as num).toDouble(), SimColors.success, const Color(0xFFF0FDF4))),
+            Expanded(child: _AmountCard('Déclaré', _money(result['montant_declare']), SimColors.success, const Color(0xFFF0FDF4))),
           ]),
           const SizedBox(height: 12),
-          _EcartBadge(ecart: (result['ecart'] as num).toDouble()),
+          _EcartBadge(ecart: _money(result['ecart'])),
         ]),
       ),
     ]),
@@ -411,9 +414,9 @@ class _HistoriqueListe extends ConsumerWidget {
                   ]),
                   const SizedBox(height: 8),
                   Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                    Text('${(r['montant_declare'] as num).toStringAsFixed(0)} F',
+                    Text('${_money(r['montant_declare']).toStringAsFixed(0)} F',
                         style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: SimColors.blue)),
-                    Text('Attendu : ${(r['montant_attendu'] as num).toStringAsFixed(0)} F',
+                    Text('Attendu : ${_money(r['montant_attendu']).toStringAsFixed(0)} F',
                         style: const TextStyle(fontSize: 11, color: SimColors.textSecondary)),
                   ]),
                   if (r['numero_wave'] != null && (r['numero_wave'] as String).isNotEmpty) ...[
@@ -454,12 +457,12 @@ class _DejaSubmis extends StatelessWidget {
           ]),
           const SizedBox(height: 16),
           Row(children: [
-            Expanded(child: _AmountCard('Attendu', (reversement['montant_attendu'] as num).toDouble(), SimColors.blue, SimColors.blueTint)),
+            Expanded(child: _AmountCard('Attendu', _money(reversement['montant_attendu']), SimColors.blue, SimColors.blueTint)),
             const SizedBox(width: 10),
-            Expanded(child: _AmountCard('Déclaré', (reversement['montant_declare'] as num).toDouble(), SimColors.success, const Color(0xFFF0FDF4))),
+            Expanded(child: _AmountCard('Déclaré', _money(reversement['montant_declare']), SimColors.success, const Color(0xFFF0FDF4))),
           ]),
           const SizedBox(height: 12),
-          _EcartBadge(ecart: (reversement['ecart'] as num).toDouble()),
+          _EcartBadge(ecart: _money(reversement['ecart'])),
         ]),
       ),
       const SizedBox(height: 16),

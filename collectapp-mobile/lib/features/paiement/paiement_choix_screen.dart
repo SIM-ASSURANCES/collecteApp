@@ -5,6 +5,9 @@ import 'package:go_router/go_router.dart';
 import '../../core/api/api_client.dart';
 import '../../core/theme/app_theme.dart';
 
+// PostgreSQL renvoie les decimals comme chaînes ("500.00") → parsing sûr
+double _money(dynamic v) => double.tryParse(v?.toString() ?? '') ?? 0;
+
 // Historique d'un cotisant (paiements + jours manqués)
 final historiqueCotisantProvider =
     FutureProvider.family<Map<String, dynamic>, int>((ref, id) async {
@@ -136,7 +139,7 @@ class _HistoriqueSection extends StatelessWidget {
     final paiements = (h['paiements'] as List).map((e) => Map<String, dynamic>.from(e as Map)).toList();
     final jours     = (h['jours_manques'] as List).map((e) => e.toString()).toList();
     final nbManques = h['nombre_jours_manques'] as int? ?? jours.length;
-    final totalPaye = (h['total_paye'] as num?)?.toDouble() ?? 0;
+    final totalPaye = _money(h['total_paye']);
 
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       // Bandeau stats
@@ -189,7 +192,7 @@ class _HistoriqueSection extends StatelessWidget {
               Text('${p['mode']}'.toUpperCase(),
                   style: const TextStyle(color: SimColors.textSecondary, fontSize: 10)),
             ])),
-            Text('${(p['montant'] as num).toStringAsFixed(0)} F',
+            Text('${_money(p['montant']).toStringAsFixed(0)} F',
                 style: const TextStyle(fontWeight: FontWeight.w700, color: SimColors.success, fontSize: 14)),
           ]),
         )),

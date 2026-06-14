@@ -30,9 +30,14 @@ exports.search = async (req, res, next) => {
     const { q } = req.query;
     if (!q) return res.status(400).json({ message: 'Paramètre de recherche requis.' });
     const results = await db('cotisants')
-      .where('nom', 'ilike', `%${q}%`)
-      .orWhere('telephone', 'ilike', `%${q}%`)
       .where({ actif: true })
+      // Un commercial ne cherche que parmi ses propres cotisants
+      .modify((qb) => {
+        if (req.user.role === 'COMMERCIAL') qb.where({ commercial_id: req.user.id });
+      })
+      .andWhere((qb) => {
+        qb.where('nom', 'ilike', `%${q}%`).orWhere('telephone', 'ilike', `%${q}%`);
+      })
       .select('id', 'nom', 'telephone', 'montant_journalier', 'commercial_id');
     res.json(results);
   } catch (err) { next(err); }
@@ -42,6 +47,10 @@ exports.getOne = async (req, res, next) => {
   try {
     const cotisant = await db('cotisants').where({ id: req.params.id }).first();
     if (!cotisant) return res.status(404).json({ message: 'Cotisant introuvable.' });
+    // Un commercial ne consulte que ses propres cotisants (anti-IDOR)
+    if (req.user.role === 'COMMERCIAL' && cotisant.commercial_id !== req.user.id) {
+      return res.status(403).json({ message: 'Accès refusé.' });
+    }
     res.json(cotisant);
   } catch (err) { next(err); }
 };

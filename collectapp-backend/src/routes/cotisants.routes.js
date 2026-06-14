@@ -12,8 +12,10 @@ router.get('/search', authorize('ADMIN', 'SUPERVISEUR', 'COMMERCIAL'), ctrl.sear
 router.get('/:id', authorize('ADMIN', 'SUPERVISEUR', 'COMMERCIAL'), param('id').isInt(), ctrl.getOne);
 router.get('/:id/historique', authorize('ADMIN', 'SUPERVISEUR', 'COMMERCIAL'), param('id').isInt(), ctrl.historique);
 
+// Écriture réservée aux ADMIN / SUPERVISEUR (gestion des cotisants)
 router.post(
   '/',
+  authorize('ADMIN', 'SUPERVISEUR'),
   [
     body('nom').notEmpty().withMessage('Le nom est requis.'),
     body('telephone').notEmpty().withMessage('Le téléphone est requis.'),
@@ -25,10 +27,11 @@ router.post(
 
 router.put(
   '/:id',
+  authorize('ADMIN', 'SUPERVISEUR'),
   [param('id').isInt()],
   ctrl.update
 );
 
-router.patch('/:id/desactiver', param('id').isInt(), ctrl.desactiver);
+router.patch('/:id/desactiver', authorize('ADMIN', 'SUPERVISEUR'), param('id').isInt(), ctrl.desactiver);
 
 module.exports = router;

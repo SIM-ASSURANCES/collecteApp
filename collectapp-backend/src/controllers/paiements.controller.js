@@ -1,3 +1,4 @@
+const crypto = require('crypto');
 const { validationResult } = require('express-validator');
 const db = require('../config/db');
 const logger = require('../config/logger');
@@ -24,6 +25,12 @@ exports.enregistrerManuel = async (req, res, next) => {
 
   const { cotisant_id, montant, mode } = req.body;
   try {
+    const cible = await db('cotisants').where({ id: cotisant_id }).first();
+    if (!cible) return res.status(404).json({ message: 'Cotisant introuvable.' });
+    if (req.user.role === 'COMMERCIAL' && cible.commercial_id !== req.user.id) {
+      return res.status(403).json({ message: 'Ce cotisant ne fait pas partie de votre liste.' });
+    }
+
     if (await dejaPayeAujourdhui(cotisant_id)) {
       return res.status(409).json({
         message: 'Ce cotisant a déjà payé aujourd\'hui. Confirmez-vous un second paiement ?',
@@ -103,8 +110,32 @@ exports.statutSessionWave = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
+// Vérifie la signature HMAC-SHA256 du webhook Wave (en-tête Wave-Signature)
+function webhookWaveAutorise(req) {
+  const secret = process.env.WAVE_WEBHOOK_SECRET;
+  if (!secret) return false; // fail-closed : pas de secret → webhook désactivé
+  const header = req.headers['wave-signature'];
+  if (!header || !req.rawBody) return false;
+  const parts = Object.fromEntries(
+    String(header).split(',').map((s) => s.split('=').map((x) => x.trim()))
+  );
+  const provided = parts.v1;
+  if (!provided) return false;
+  const signed = `${parts.t || ''}.${req.rawBody.toString('utf8')}`;
+  const expected = crypto.createHmac('sha256', secret).update(signed).digest('hex');
+  try {
+    return crypto.timingSafeEqual(Buffer.from(provided), Buffer.from(expected));
+  } catch {
+    return false;
+  }
+}
+
 exports.webhookWave = async (req, res, next) => {
   try {
+    if (!webhookWaveAutorise(req)) {
+      logger.warn('Webhook Wave rejeté : signature invalide ou secret absent');
+      return res.status(401).json({ message: 'Signature invalide.' });
+    }
     const { telephone, montant, reference } = req.body;
 
     const cotisant = await db('cotisants').where({ telephone, actif: true }).first();
@@ -184,6 +215,13 @@ exports.enregistrer = async (req, res, next) => {
     return res.status(400).json({ message: 'cotisant_id, montant et mode sont obligatoires.' });
   }
   try {
+    // Un commercial ne peut encaisser que pour ses propres cotisants (anti-IDOR)
+    const cible = await db('cotisants').where({ id: cotisant_id }).first();
+    if (!cible) return res.status(404).json({ message: 'Cotisant introuvable.' });
+    if (req.user.role === 'COMMERCIAL' && cible.commercial_id !== req.user.id) {
+      return res.status(403).json({ message: 'Ce cotisant ne fait pas partie de votre liste.' });
+    }
+
     if (await dejaPayeAujourdhui(cotisant_id)) {
       return res.status(409).json({
         message: 'Ce cotisant a déjà payé aujourd\'hui.',
@@ -223,17 +261,43 @@ exports.syncOffline = async (req, res, next) => {
   if (!Array.isArray(operations)) {
     return res.status(400).json({ message: 'Format invalide.' });
   }
+  const MODES = ['wave', 'especes', 'cheque', 'autre'];
   const resultats = [];
   for (const op of operations) {
     try {
-      if (await dejaPayeAujourdhui(op.cotisant_id, op.date)) {
+      const cotisant_id = parseInt(op.cotisant_id, 10);
+      const montant = parseFloat(op.montant);
+      const mode = MODES.includes(op.mode) ? op.mode : 'especes';
+      if (!cotisant_id || !(montant > 0)) {
+        resultats.push({ ...op, statut: 'erreur', message: 'Données invalides.' });
+        continue;
+      }
+
+      // Vérifier l'appartenance du cotisant au commercial (anti-IDOR / mass-assignment)
+      const cible = await db('cotisants').where({ id: cotisant_id }).first();
+      if (!cible || cible.commercial_id !== req.user.id) {
+        resultats.push({ ...op, statut: 'erreur', message: 'Cotisant non autorisé.' });
+        continue;
+      }
+
+      if (await dejaPayeAujourdhui(cotisant_id, op.date)) {
         resultats.push({ ...op, statut: 'doublon' });
         continue;
       }
-      const [p] = await db('paiements').insert({ ...op, commercial_id: req.user.id }).returning('id');
-      resultats.push({ ...op, statut: 'ok', server_id: p.id });
+
+      // Insertion en liste blanche stricte des champs (jamais ...op)
+      const [p] = await db('paiements').insert({
+        cotisant_id,
+        commercial_id: req.user.id,
+        date: today(),
+        montant,
+        mode,
+        statut: 'paye',
+        horodatage: new Date(),
+      }).returning('id');
+      resultats.push({ cotisant_id, statut: 'ok', server_id: p.id });
     } catch (e) {
-      resultats.push({ ...op, statut: 'erreur', message: e.message });
+      resultats.push({ statut: 'erreur', message: e.message });
     }
   }
   res.json({ resultats });

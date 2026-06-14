@@ -1,14 +1,16 @@
-﻿services:
+services:
   collecte-backend:
-    image: ghcr.io/sim-assurances/collectapp-backend:v7
+    image: ghcr.io/sim-assurances/collectapp-backend:v8
     environment:
       NODE_ENV: production
       PORT: 5000
-      DATABASE_URL: postgresql://postgres:RepensTOI@collecte-mysim-collecte-nfmnqg:5432/collecteApp
-      JWT_SECRET: c1ab8d3b389eaae3dbe3ab288f7e6ca3f5a6e113ad6b0f752a4daf5d0079062879b562c396eb5365082996ab46f2caa8b890849967c4845367d283fbd30db0ad
+      # ⚠️ Valeurs réelles à renseigner dans l'onglet Dokploy (jamais dans Git)
+      DATABASE_URL: ${DATABASE_URL}
+      JWT_SECRET: ${JWT_SECRET}
       JWT_EXPIRES_IN: 24h
       CORS_ORIGIN: https://collecte.mysimassurances.com
-      WAVE_API_KEY: VOTRE_CLE_API_WAVE_ICI
+      WAVE_API_KEY: ${WAVE_API_KEY}
+      WAVE_WEBHOOK_SECRET: ${WAVE_WEBHOOK_SECRET}
     networks:
       - dokploy-network
     restart: unless-stopped

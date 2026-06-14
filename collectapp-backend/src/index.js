@@ -3,20 +3,56 @@ const express = require('express');
 const cors    = require('cors');
 const helmet  = require('helmet');
 const morgan  = require('morgan');
+const rateLimit = require('express-rate-limit');
 const swaggerUi   = require('swagger-ui-express');
 const swaggerSpec = require('./config/swagger');
 const errorHandler = require('./middlewares/errorHandler');
 
+// ── Garde-fous de configuration : refus de démarrer sans secret ──
+if (!process.env.JWT_SECRET || process.env.JWT_SECRET.length < 32) {
+  console.error('FATAL : JWT_SECRET manquant ou trop court (min 32 caractères).');
+  process.exit(1);
+}
+
+const isProd = process.env.NODE_ENV === 'production';
 const app = express();
 
-// Sécurité & parsing
+// Derrière le reverse-proxy (Traefik/Nginx) — nécessaire pour le rate-limit par IP
+app.set('trust proxy', 1);
+
+// Sécurité & parsing (limite de taille + capture du corps brut pour la signature webhook)
 app.use(helmet());
-app.use(cors({ origin: process.env.CORS_ORIGIN || '*' }));
-app.use(express.json());
+app.use(cors({
+  origin: isProd ? (process.env.CORS_ORIGIN || false) : '*',
+}));
+app.use(express.json({
+  limit: '100kb',
+  verify: (req, _res, buf) => { req.rawBody = buf; },
+}));
 app.use(morgan('dev'));
 
-// Documentation API
-app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+// Rate-limiting global
+app.use('/api', rateLimit({
+  windowMs: 60 * 1000,
+  max: 200,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { message: 'Trop de requêtes, réessayez dans un instant.' },
+}));
+
+// Rate-limiting renforcé sur l'authentification (anti brute-force)
+app.use('/api/auth/login', rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { message: 'Trop de tentatives de connexion. Réessayez plus tard.' },
+}));
+
+// Documentation API — désactivée en production (évite la divulgation d'informations)
+if (!isProd) {
+  app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+}
 
 // Routes
 app.use('/api/auth',         require('./routes/auth.routes'));

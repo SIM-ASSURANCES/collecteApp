@@ -1,10 +1,10 @@
-services:
+﻿services:
   collecte-backend:
     image: ghcr.io/sim-assurances/collectapp-backend:v9
     environment:
       NODE_ENV: production
       PORT: 5000
-      # ⚠️ Valeurs réelles à renseigner dans l'onglet Dokploy (jamais dans Git)
+      # âš ï¸ Valeurs rÃ©elles Ã  renseigner dans l'onglet Dokploy (jamais dans Git)
       DATABASE_URL: ${DATABASE_URL}
       JWT_SECRET: ${JWT_SECRET}
       JWT_EXPIRES_IN: 24h
@@ -16,7 +16,7 @@ services:
     restart: unless-stopped
 
   collecte-frontend:
-    image: ghcr.io/sim-assurances/collectapp-frontend:v9
+    image: ghcr.io/sim-assurances/collectapp-frontend:v10
     depends_on:
       - collecte-backend
     networks:

@@ -42,52 +42,46 @@ class _ReversementScreenState extends ConsumerState<ReversementScreen> {
   bool _soumis    = false;
   bool _loading   = false;
   bool _historique = false;
-  bool _wavePaye  = false;       // le commercial a ouvert/réglé via Wave
-  bool _waveLoading = false;
   Map<String, dynamic>? _result;
 
   @override
   void dispose() { _ctrl.dispose(); _waveCtrl.dispose(); super.dispose(); }
 
-  // Crée une session Wave pour le montant et ouvre l'app/lien Wave
-  Future<void> _payerViaWave(double montant) async {
-    setState(() => _waveLoading = true);
-    try {
-      final dio  = ref.read(dioProvider);
-      final resp = await dio.post('/reversements/wave-session', data: {'montant': montant});
-      final url  = resp.data['wave_launch_url'] as String?;
-      if (url != null && await canLaunchUrl(Uri.parse(url))) {
-        await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
-        setState(() => _wavePaye = true);
-      } else {
-        throw Exception('lien indisponible');
-      }
-    } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Wave indisponible — vous pouvez valider manuellement')));
-    } finally {
-      if (mounted) setState(() => _waveLoading = false);
-    }
-  }
-
-  Future<void> _soumettre(double montantAttendu) async {
+  // Paiement Wave OBLIGATOIRE : crée la session, ouvre Wave, puis enregistre le reversement
+  Future<void> _payerEtReverser(double montantAttendu) async {
     final declare = double.tryParse(_ctrl.text) ?? 0;
     final wave    = _waveCtrl.text.trim();
     if (declare <= 0) return;
     setState(() => _loading = true);
     try {
-      final dio  = ref.read(dioProvider);
+      final dio = ref.read(dioProvider);
+
+      // 1) Créer la session de paiement Wave
+      final sess = await dio.post('/reversements/wave-session', data: {'montant': declare});
+      final url  = sess.data['wave_launch_url'] as String?;
+      final sid  = sess.data['id'] as String?;
+      if (url == null) throw Exception('Lien Wave indisponible');
+
+      // 2) Ouvrir Wave (lancement direct, sans canLaunchUrl qui échoue sur Android 11+)
+      final ok = await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+      if (!ok) throw Exception('Impossible d\'ouvrir Wave');
+
+      // 3) Enregistrer le reversement (référence Wave incluse)
       final resp = await dio.post('/reversements', data: {
         'montant_declare': declare,
         'montant_attendu': montantAttendu,
-        'numero_wave': wave,
+        'numero_wave': wave.isNotEmpty ? wave : sid,
       });
       ref.invalidate(mesReversementsProvider);
-      setState(() { _result = Map<String, dynamic>.from(resp.data as Map); _soumis = true; _loading = false; });
+      if (mounted) {
+        setState(() { _result = Map<String, dynamic>.from(resp.data as Map); _soumis = true; _loading = false; });
+      }
     } catch (e) {
-      setState(() => _loading = false);
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Erreur lors de la soumission')));
+      if (mounted) {
+        setState(() => _loading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Paiement Wave impossible. Vérifiez votre connexion et réessayez.')));
+      }
     }
   }
 
@@ -131,10 +125,8 @@ class _ReversementScreenState extends ConsumerState<ReversementScreen> {
               if (_confirme) return _EtapeConfirmation(
                 attendu: attendu, declare: declare, ecart: ecart, loading: _loading,
                 numeroWave: _waveCtrl.text.trim(),
-                wavePaye: _wavePaye, waveLoading: _waveLoading,
-                onPayerWave: () => _payerViaWave(declare),
-                onModifier: () => setState(() { _confirme = false; _wavePaye = false; }),
-                onSoumettre: () => _soumettre(attendu),
+                onModifier: () => setState(() => _confirme = false),
+                onPayerEtReverser: () => _payerEtReverser(attendu),
               );
 
               return SingleChildScrollView(
@@ -245,12 +237,12 @@ class _ReversementScreenState extends ConsumerState<ReversementScreen> {
 
 class _EtapeConfirmation extends StatelessWidget {
   final double attendu, declare, ecart;
-  final bool loading, wavePaye, waveLoading;
+  final bool loading;
   final String numeroWave;
-  final VoidCallback onModifier, onSoumettre, onPayerWave;
+  final VoidCallback onModifier, onPayerEtReverser;
   const _EtapeConfirmation({required this.attendu, required this.declare, required this.ecart,
-      required this.loading, required this.numeroWave, required this.wavePaye, required this.waveLoading,
-      required this.onPayerWave, required this.onModifier, required this.onSoumettre});
+      required this.loading, required this.numeroWave,
+      required this.onModifier, required this.onPayerEtReverser});
 
   @override
   Widget build(BuildContext context) => Padding(
@@ -297,49 +289,30 @@ class _EtapeConfirmation extends StatelessWidget {
           ]),
         ),
       ],
-      const SizedBox(height: 16),
-      // Étape 1 : payer le montant à SIM via Wave
-      SizedBox(
-        width: double.infinity,
-        child: ElevatedButton.icon(
-          onPressed: waveLoading ? null : onPayerWave,
-          style: ElevatedButton.styleFrom(
-            backgroundColor: wavePaye ? SimColors.success : SimColors.blue,
-            minimumSize: const Size(0, 52),
-          ),
-          icon: waveLoading
-              ? const SizedBox(height: 18, width: 18, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-              : Icon(wavePaye ? Icons.check_circle : Icons.smartphone),
-          label: Text(wavePaye ? 'Paiement Wave effectué' : 'Payer le reversement via Wave'),
-        ),
-      ),
       const SizedBox(height: 8),
-      Text(
-        wavePaye
-            ? 'Vous pouvez maintenant valider le reversement.'
-            : 'Réglez le montant à SIM via Wave, puis validez.',
-        style: const TextStyle(fontSize: 11, color: SimColors.textSecondary),
+      const Text(
+        'Le reversement se règle via Wave. En continuant, vous payez le montant à SIM et le reversement est enregistré.',
+        style: TextStyle(fontSize: 11, color: SimColors.textSecondary),
         textAlign: TextAlign.center,
       ),
       const Spacer(),
-      Row(children: [
-        Expanded(child: OutlinedButton(
-          onPressed: onModifier,
-          style: OutlinedButton.styleFrom(
-            minimumSize: const Size(0, 52),
-            side: const BorderSide(color: SimColors.blue),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          ),
-          child: const Text('Modifier'),
-        )),
-        const SizedBox(width: 12),
-        Expanded(child: ElevatedButton(
-          onPressed: loading ? null : onSoumettre,
-          child: loading
+      // Paiement Wave obligatoire (plus de validation manuelle)
+      SizedBox(
+        width: double.infinity,
+        child: ElevatedButton.icon(
+          onPressed: loading ? null : onPayerEtReverser,
+          style: ElevatedButton.styleFrom(minimumSize: const Size(0, 54)),
+          icon: loading
               ? const SizedBox(height: 18, width: 18, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-              : const Text('Valider le reversement'),
-        )),
-      ]),
+              : const Icon(Icons.smartphone),
+          label: Text(loading ? 'Ouverture de Wave…' : 'Payer le reversement via Wave'),
+        ),
+      ),
+      const SizedBox(height: 10),
+      TextButton(
+        onPressed: loading ? null : onModifier,
+        child: const Text('Modifier le montant'),
+      ),
     ]),
   );
 }

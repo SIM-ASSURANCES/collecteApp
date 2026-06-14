@@ -40,22 +40,23 @@ export default function CommercialReversement() {
   const [etape, setEtape] = useState<Etape>('saisie');
   const [montantDeclare, setMontantDeclare] = useState('');
   const [numeroWave, setNumeroWave] = useState('');
-  const [wavePaye, setWavePaye] = useState(false);
   const [waveLoading, setWaveLoading] = useState(false);
   const [reversementSoumis, setReversementSoumis] = useState<ReversementItem | null>(null);
 
-  const payerViaWave = async () => {
+  // Paiement Wave obligatoire : crée la session, ouvre Wave, puis enregistre le reversement
+  const payerEtReverser = async () => {
     setWaveLoading(true);
     try {
       const { data } = await api.post('/reversements/wave-session', { montant: montantDeclareNum });
-      if (data?.wave_launch_url) {
-        window.open(data.wave_launch_url, '_blank', 'noopener');
-        setWavePaye(true);
-      } else {
-        toast.error('Lien Wave indisponible');
-      }
+      if (!data?.wave_launch_url) { toast.error('Lien Wave indisponible'); return; }
+      window.open(data.wave_launch_url, '_blank', 'noopener');
+      reversementMutation.mutate({
+        montant_declare: montantDeclareNum,
+        montant_attendu: montantAttendu,
+        numero_wave: numeroWave.trim() || data.id,
+      });
     } catch (e: any) {
-      toast.error(e?.response?.data?.message || 'Wave indisponible — vous pouvez valider manuellement');
+      toast.error(e?.response?.data?.message || 'Paiement Wave impossible. Réessayez.');
     } finally {
       setWaveLoading(false);
     }
@@ -106,14 +107,6 @@ export default function CommercialReversement() {
     if (montantDeclareNum <= 0) { toast.error('Saisissez un montant valide'); return; }
     if (numeroWave.trim().length < 8) { toast.error('Saisissez un numéro Wave valide'); return; }
     setEtape('confirmation');
-  };
-
-  const handleSoumettre = () => {
-    reversementMutation.mutate({
-      montant_declare: montantDeclareNum,
-      montant_attendu: montantAttendu,
-      numero_wave: numeroWave.trim(),
-    });
   };
 
   // ════════ ONGLET HISTORIQUE ════════
@@ -275,30 +268,19 @@ export default function CommercialReversement() {
           </div>
         </div>
 
-        <button onClick={payerViaWave} disabled={waveLoading}
-                className="w-full py-3 rounded-xl flex items-center justify-center gap-2 font-semibold text-white"
-                style={{ background: wavePaye ? '#059669' : '#004B9C' }}>
-          {waveLoading
-            ? <><Loader2 size={18} className="animate-spin" /> Ouverture de Wave…</>
-            : wavePaye
-            ? <><CheckCircle2 size={18} /> Paiement Wave effectué</>
-            : <><Smartphone size={18} /> Payer le reversement via Wave</>}
-        </button>
-        <p className="text-center text-xs text-gray-400 -mt-2">
-          {wavePaye ? 'Vous pouvez maintenant valider le reversement.' : 'Réglez le montant à SIM via Wave, puis validez.'}
+        <p className="text-center text-xs text-gray-400">
+          Le reversement se règle via Wave. En continuant, vous payez le montant à SIM et le reversement est enregistré.
         </p>
 
-        <div className="flex gap-3">
-          <button onClick={() => { setEtape('saisie'); setWavePaye(false); }} className="sim-btn-secondary flex-1 py-3 rounded-xl">
-            Modifier
-          </button>
-          <button onClick={handleSoumettre} disabled={reversementMutation.isPending}
-                  className="sim-btn-primary flex-1 py-3 rounded-xl flex items-center justify-center gap-2">
-            {reversementMutation.isPending
-              ? <><Loader2 size={18} className="animate-spin" /> Envoi…</>
-              : <><CheckCircle2 size={18} /> Valider</>}
-          </button>
-        </div>
+        <button onClick={payerEtReverser} disabled={waveLoading || reversementMutation.isPending}
+                className="sim-btn-primary w-full py-4 rounded-xl flex items-center justify-center gap-2">
+          {(waveLoading || reversementMutation.isPending)
+            ? <><Loader2 size={18} className="animate-spin" /> Ouverture de Wave…</>
+            : <><Smartphone size={18} /> Payer le reversement via Wave</>}
+        </button>
+        <button onClick={() => setEtape('saisie')} className="w-full py-2 text-sm font-medium" style={{ color: '#004B9C' }}>
+          Modifier le montant
+        </button>
       </div>
     );
   }

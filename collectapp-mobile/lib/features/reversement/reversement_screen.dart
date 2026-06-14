@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/api/api_client.dart';
 import '../../core/theme/app_theme.dart';
@@ -38,10 +39,33 @@ class _ReversementScreenState extends ConsumerState<ReversementScreen> {
   bool _soumis    = false;
   bool _loading   = false;
   bool _historique = false;
+  bool _wavePaye  = false;       // le commercial a ouvert/réglé via Wave
+  bool _waveLoading = false;
   Map<String, dynamic>? _result;
 
   @override
   void dispose() { _ctrl.dispose(); _waveCtrl.dispose(); super.dispose(); }
+
+  // Crée une session Wave pour le montant et ouvre l'app/lien Wave
+  Future<void> _payerViaWave(double montant) async {
+    setState(() => _waveLoading = true);
+    try {
+      final dio  = ref.read(dioProvider);
+      final resp = await dio.post('/reversements/wave-session', data: {'montant': montant});
+      final url  = resp.data['wave_launch_url'] as String?;
+      if (url != null && await canLaunchUrl(Uri.parse(url))) {
+        await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+        setState(() => _wavePaye = true);
+      } else {
+        throw Exception('lien indisponible');
+      }
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Wave indisponible — vous pouvez valider manuellement')));
+    } finally {
+      if (mounted) setState(() => _waveLoading = false);
+    }
+  }
 
   Future<void> _soumettre(double montantAttendu) async {
     final declare = double.tryParse(_ctrl.text) ?? 0;
@@ -104,7 +128,9 @@ class _ReversementScreenState extends ConsumerState<ReversementScreen> {
               if (_confirme) return _EtapeConfirmation(
                 attendu: attendu, declare: declare, ecart: ecart, loading: _loading,
                 numeroWave: _waveCtrl.text.trim(),
-                onModifier: () => setState(() => _confirme = false),
+                wavePaye: _wavePaye, waveLoading: _waveLoading,
+                onPayerWave: () => _payerViaWave(declare),
+                onModifier: () => setState(() { _confirme = false; _wavePaye = false; }),
                 onSoumettre: () => _soumettre(attendu),
               );
 
@@ -216,11 +242,12 @@ class _ReversementScreenState extends ConsumerState<ReversementScreen> {
 
 class _EtapeConfirmation extends StatelessWidget {
   final double attendu, declare, ecart;
-  final bool loading;
+  final bool loading, wavePaye, waveLoading;
   final String numeroWave;
-  final VoidCallback onModifier, onSoumettre;
+  final VoidCallback onModifier, onSoumettre, onPayerWave;
   const _EtapeConfirmation({required this.attendu, required this.declare, required this.ecart,
-      required this.loading, required this.numeroWave, required this.onModifier, required this.onSoumettre});
+      required this.loading, required this.numeroWave, required this.wavePaye, required this.waveLoading,
+      required this.onPayerWave, required this.onModifier, required this.onSoumettre});
 
   @override
   Widget build(BuildContext context) => Padding(
@@ -267,6 +294,30 @@ class _EtapeConfirmation extends StatelessWidget {
           ]),
         ),
       ],
+      const SizedBox(height: 16),
+      // Étape 1 : payer le montant à SIM via Wave
+      SizedBox(
+        width: double.infinity,
+        child: ElevatedButton.icon(
+          onPressed: waveLoading ? null : onPayerWave,
+          style: ElevatedButton.styleFrom(
+            backgroundColor: wavePaye ? SimColors.success : SimColors.blue,
+            minimumSize: const Size(0, 52),
+          ),
+          icon: waveLoading
+              ? const SizedBox(height: 18, width: 18, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+              : Icon(wavePaye ? Icons.check_circle : Icons.smartphone),
+          label: Text(wavePaye ? 'Paiement Wave effectué' : 'Payer le reversement via Wave'),
+        ),
+      ),
+      const SizedBox(height: 8),
+      Text(
+        wavePaye
+            ? 'Vous pouvez maintenant valider le reversement.'
+            : 'Réglez le montant à SIM via Wave, puis validez.',
+        style: const TextStyle(fontSize: 11, color: SimColors.textSecondary),
+        textAlign: TextAlign.center,
+      ),
       const Spacer(),
       Row(children: [
         Expanded(child: OutlinedButton(
@@ -283,7 +334,7 @@ class _EtapeConfirmation extends StatelessWidget {
           onPressed: loading ? null : onSoumettre,
           child: loading
               ? const SizedBox(height: 18, width: 18, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-              : const Text('Soumettre'),
+              : const Text('Valider le reversement'),
         )),
       ]),
     ]),

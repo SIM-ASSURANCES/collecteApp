@@ -40,7 +40,26 @@ export default function CommercialReversement() {
   const [etape, setEtape] = useState<Etape>('saisie');
   const [montantDeclare, setMontantDeclare] = useState('');
   const [numeroWave, setNumeroWave] = useState('');
+  const [wavePaye, setWavePaye] = useState(false);
+  const [waveLoading, setWaveLoading] = useState(false);
   const [reversementSoumis, setReversementSoumis] = useState<ReversementItem | null>(null);
+
+  const payerViaWave = async () => {
+    setWaveLoading(true);
+    try {
+      const { data } = await api.post('/reversements/wave-session', { montant: montantDeclareNum });
+      if (data?.wave_launch_url) {
+        window.open(data.wave_launch_url, '_blank', 'noopener');
+        setWavePaye(true);
+      } else {
+        toast.error('Lien Wave indisponible');
+      }
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message || 'Wave indisponible — vous pouvez valider manuellement');
+    } finally {
+      setWaveLoading(false);
+    }
+  };
 
   const { data: sommaire, isLoading } = useQuery<SommairePaiements>({
     queryKey: ['sommaire-paiements-today'],
@@ -251,19 +270,33 @@ export default function CommercialReversement() {
           <EcartCard ecart={ecart} />
           <div className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm" style={{ background: '#F4F6FA' }}>
             <Smartphone size={15} style={{ color: '#004B9C' }} />
-            <span className="text-gray-600">Reversé via Wave :</span>
+            <span className="text-gray-600">Numéro Wave :</span>
             <span className="font-semibold font-mono" style={{ color: '#004B9C' }}>{numeroWave}</span>
           </div>
         </div>
+
+        <button onClick={payerViaWave} disabled={waveLoading}
+                className="w-full py-3 rounded-xl flex items-center justify-center gap-2 font-semibold text-white"
+                style={{ background: wavePaye ? '#059669' : '#004B9C' }}>
+          {waveLoading
+            ? <><Loader2 size={18} className="animate-spin" /> Ouverture de Wave…</>
+            : wavePaye
+            ? <><CheckCircle2 size={18} /> Paiement Wave effectué</>
+            : <><Smartphone size={18} /> Payer le reversement via Wave</>}
+        </button>
+        <p className="text-center text-xs text-gray-400 -mt-2">
+          {wavePaye ? 'Vous pouvez maintenant valider le reversement.' : 'Réglez le montant à SIM via Wave, puis validez.'}
+        </p>
+
         <div className="flex gap-3">
-          <button onClick={() => setEtape('saisie')} className="sim-btn-secondary flex-1 py-3 rounded-xl">
+          <button onClick={() => { setEtape('saisie'); setWavePaye(false); }} className="sim-btn-secondary flex-1 py-3 rounded-xl">
             Modifier
           </button>
           <button onClick={handleSoumettre} disabled={reversementMutation.isPending}
                   className="sim-btn-primary flex-1 py-3 rounded-xl flex items-center justify-center gap-2">
             {reversementMutation.isPending
               ? <><Loader2 size={18} className="animate-spin" /> Envoi…</>
-              : <><CheckCircle2 size={18} /> Soumettre</>}
+              : <><CheckCircle2 size={18} /> Valider</>}
           </button>
         </div>
       </div>

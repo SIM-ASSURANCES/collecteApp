@@ -10,6 +10,7 @@ router.use(auth);
 router.get('/', authorize('ADMIN', 'SUPERVISEUR', 'COMMERCIAL'), ctrl.list);
 router.get('/search', authorize('ADMIN', 'SUPERVISEUR', 'COMMERCIAL'), ctrl.search);
 router.get('/:id', authorize('ADMIN', 'SUPERVISEUR', 'COMMERCIAL'), param('id').isInt(), ctrl.getOne);
+router.get('/:id/historique', authorize('ADMIN', 'SUPERVISEUR', 'COMMERCIAL'), param('id').isInt(), ctrl.historique);
 
 router.post(
   '/',

@@ -20,6 +20,10 @@ router.get('/today', authorize('COMMERCIAL'), ctrl.todayReversement);
 // Historique des reversements du commercial connecte
 router.get('/mes', authorize('COMMERCIAL'), ctrl.mesReversements);
 
+// Session Wave pour regler un reversement
+router.post('/wave-session', authorize('COMMERCIAL'),
+  [body('montant').isFloat({ gt: 0 })], ctrl.creerSessionWaveReversement);
+
 // Admin consulte tous les reversements
 router.get('/', authorize('ADMIN', 'SUPERVISEUR'), ctrl.list);
 

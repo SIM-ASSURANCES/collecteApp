@@ -53,7 +53,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Image.asset('assets/images/logo_sim.webp', height: 70),
+                    Image.asset('assets/images/logo_sim.webp', height: 40),
                     const SizedBox(height: 16),
                     const Text(
                       'Collecte terrain',

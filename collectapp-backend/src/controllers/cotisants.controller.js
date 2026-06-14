@@ -46,6 +46,70 @@ exports.getOne = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
+// Date du jour au fuseau de la Côte d'Ivoire (Africa/Abidjan, UTC+0)
+const todayCI = () =>
+  new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Abidjan' }).format(new Date());
+
+const toDateStr = (d) =>
+  (d instanceof Date ? d.toISOString().slice(0, 10) : String(d).slice(0, 10));
+
+// Historique de paiements d'un cotisant + jours impayés (dates manquées)
+exports.historique = async (req, res, next) => {
+  try {
+    const id = Number(req.params.id);
+    const cotisant = await db('cotisants').where({ id }).first();
+    if (!cotisant) return res.status(404).json({ message: 'Cotisant introuvable.' });
+
+    // Un commercial ne consulte que ses propres cotisants
+    if (req.user.role === 'COMMERCIAL' && cotisant.commercial_id !== req.user.id) {
+      return res.status(403).json({ message: 'Accès refusé.' });
+    }
+
+    const paiements = await db('paiements')
+      .where({ cotisant_id: id })
+      .whereNot('statut', 'annule')
+      .orderBy('date', 'desc')
+      .orderBy('horodatage', 'desc')
+      .select('id', 'date', 'montant', 'mode', 'statut', 'horodatage', 'reference_wave');
+
+    const datesPayees = new Set(paiements.map((p) => toDateStr(p.date)));
+
+    // Jours manqués : du lendemain de l'inscription jusqu'à hier (aujourd'hui non échu)
+    const todayStr = todayCI();
+    const today = new Date(todayStr + 'T00:00:00Z');
+    let cur = new Date(toDateStr(cotisant.date_inscription) + 'T00:00:00Z');
+
+    const joursManques = [];
+    let garde = 0;
+    while (cur < today && garde < 1000) {
+      const ds = cur.toISOString().slice(0, 10);
+      if (!datesPayees.has(ds)) joursManques.push(ds);
+      cur.setUTCDate(cur.getUTCDate() + 1);
+      garde++;
+    }
+
+    const totalPaye = paiements
+      .filter((p) => p.statut === 'paye')
+      .reduce((s, p) => s + Number(p.montant), 0);
+
+    res.json({
+      cotisant: {
+        id: cotisant.id,
+        nom: cotisant.nom,
+        telephone: cotisant.telephone,
+        montant_journalier: cotisant.montant_journalier,
+        date_inscription: cotisant.date_inscription,
+      },
+      paiements,
+      nombre_paiements: paiements.length,
+      total_paye: totalPaye,
+      jours_manques: joursManques.reverse(), // plus récents en premier
+      nombre_jours_manques: joursManques.length,
+      paye_aujourd_hui: datesPayees.has(todayStr),
+    });
+  } catch (err) { next(err); }
+};
+
 exports.create = async (req, res, next) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });

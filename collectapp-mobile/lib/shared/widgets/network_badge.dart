@@ -23,34 +23,30 @@ class NetworkBadge extends ConsumerWidget {
     );
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
-        color: isOnline
-            ? Colors.green.withValues(alpha: 0.2)
-            : Colors.red.withValues(alpha: 0.2),
+        color: isOnline ? const Color(0xFF22C55E) : const Color(0xFFEF4444),
         borderRadius: BorderRadius.circular(20),
       ),
       child: Row(mainAxisSize: MainAxisSize.min, children: [
-        Icon(isOnline ? Icons.wifi : Icons.wifi_off,
-            size: 12,
-            color: isOnline ? const Color(0xFF6EE7B7) : const Color(0xFFFCA5A5)),
-        const SizedBox(width: 4),
+        Icon(isOnline ? Icons.wifi : Icons.wifi_off, size: 14, color: Colors.white),
+        const SizedBox(width: 6),
         Text(
           isOnline ? 'En ligne' : 'Hors ligne',
-          style: TextStyle(
-            fontSize: 10,
+          style: const TextStyle(
+            fontSize: 12,
             fontWeight: FontWeight.w600,
-            color: isOnline ? const Color(0xFF6EE7B7) : const Color(0xFFFCA5A5),
+            color: Colors.white,
           ),
         ),
         if (count > 0) ...[
-          const SizedBox(width: 4),
+          const SizedBox(width: 6),
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
             decoration: BoxDecoration(
-              color: Colors.amber, borderRadius: BorderRadius.circular(10)),
+              color: Colors.white, borderRadius: BorderRadius.circular(10)),
             child: Text('$count',
-                style: const TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Color(0xFF78350F))),
+                style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFF15803D))),
           ),
         ],
       ]),

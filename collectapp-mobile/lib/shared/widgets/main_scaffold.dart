@@ -32,6 +32,8 @@ class MainScaffold extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(
         automaticallyImplyLeading: false,
+        toolbarHeight: 60,
+        titleSpacing: 14,
         flexibleSpace: Container(
           decoration: const BoxDecoration(
             gradient: LinearGradient(
@@ -43,28 +45,31 @@ class MainScaffold extends ConsumerWidget {
         ),
         title: Row(
           children: [
-            Image.asset('assets/images/logo_sim.webp', height: 28),
-            const SizedBox(width: 10),
-            const Text('Collecte terrain',
-                style: TextStyle(color: SimColors.blueLight, fontSize: 12, letterSpacing: 0.5)),
+            Image.asset('assets/images/logo_sim.webp', height: 30),
+            const SizedBox(width: 12),
+            const Flexible(
+              child: Text('Collecte terrain',
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(color: SimColors.blueLight, fontSize: 13, letterSpacing: 0.3)),
+            ),
           ],
         ),
         actions: [
           const NetworkBadge(),
-          const SizedBox(width: 8),
+          const SizedBox(width: 10),
           // Avatar
           GestureDetector(
             onTap: () => _showLogoutDialog(context, ref),
             child: Container(
-              margin: const EdgeInsets.only(right: 12),
-              width: 32, height: 32,
+              margin: const EdgeInsets.only(right: 14),
+              width: 36, height: 36,
               decoration: const BoxDecoration(
                 color: SimColors.blueLight, shape: BoxShape.circle,
               ),
               alignment: Alignment.center,
               child: Text(
                 user?.nom.substring(0, 1).toUpperCase() ?? '?',
-                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
               ),
             ),
           ),

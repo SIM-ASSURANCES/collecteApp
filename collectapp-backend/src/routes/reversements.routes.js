@@ -24,6 +24,10 @@ router.get('/mes', authorize('COMMERCIAL'), ctrl.mesReversements);
 router.post('/wave-session', authorize('COMMERCIAL'),
   [body('montant').isFloat({ gt: 0 })], ctrl.creerSessionWaveReversement);
 
+// Rafraichir le statut de paiement Wave d'un reversement
+router.get('/:id/statut-wave', authorize('COMMERCIAL', 'ADMIN', 'SUPERVISEUR'),
+  param('id').isInt(), ctrl.statutWave);
+
 // Admin consulte tous les reversements
 router.get('/', authorize('ADMIN', 'SUPERVISEUR'), ctrl.list);
 

@@ -59,6 +59,9 @@ export interface Reversement {
   ecart: number;
   statut: 'en_attente' | 'valide' | 'rejete';
   motif_rejet?: string;
+  numero_wave?: string | null;
+  wave_session_id?: string | null;
+  wave_payment_status?: 'non_paye' | 'processing' | 'succeeded' | 'failed';
 }
 
 export interface DashboardData {

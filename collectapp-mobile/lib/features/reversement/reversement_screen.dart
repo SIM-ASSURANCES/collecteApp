@@ -42,6 +42,7 @@ class _ReversementScreenState extends ConsumerState<ReversementScreen> {
   bool _soumis    = false;
   bool _loading   = false;
   bool _historique = false;
+  bool _reprendre = false;       // forcer le formulaire malgré un reversement existant
   Map<String, dynamic>? _result;
 
   @override
@@ -66,11 +67,12 @@ class _ReversementScreenState extends ConsumerState<ReversementScreen> {
       final ok = await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
       if (!ok) throw Exception('Impossible d\'ouvrir Wave');
 
-      // 3) Enregistrer le reversement (référence Wave incluse)
+      // 3) Enregistrer le reversement (référence + session Wave incluses)
       final resp = await dio.post('/reversements', data: {
         'montant_declare': declare,
         'montant_attendu': montantAttendu,
         'numero_wave': wave.isNotEmpty ? wave : sid,
+        'wave_session_id': sid,
       });
       ref.invalidate(mesReversementsProvider);
       if (mounted) {
@@ -111,8 +113,16 @@ class _ReversementScreenState extends ConsumerState<ReversementScreen> {
         loading: () => const Center(child: CircularProgressIndicator(color: SimColors.blue)),
         error: (_, __) => const Center(child: Text('Erreur')),
         data: (existant) {
-          if (existant != null) return _DejaSubmis(reversement: existant);
           if (_soumis && _result != null) return _SuccesReversement(result: _result!);
+          if (existant != null && !_reprendre) {
+            return _DejaSubmis(
+              reversement: existant,
+              onReprendre: () {
+                _ctrl.text = _money(existant['montant_declare']).toStringAsFixed(0);
+                setState(() => _reprendre = true);
+              },
+            );
+          }
 
           return sommaire.when(
             loading: () => const Center(child: CircularProgressIndicator(color: SimColors.blue)),
@@ -411,46 +421,133 @@ class _HistoriqueListe extends ConsumerWidget {
   }
 }
 
-class _DejaSubmis extends StatelessWidget {
+class _DejaSubmis extends ConsumerStatefulWidget {
   final Map<String, dynamic> reversement;
-  const _DejaSubmis({required this.reversement});
+  final VoidCallback onReprendre;
+  const _DejaSubmis({required this.reversement, required this.onReprendre});
 
   @override
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.all(20),
-    child: Column(children: [
-      Container(
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16),
-            boxShadow: [BoxShadow(color: SimColors.blue.withValues(alpha: 0.06), blurRadius: 8)]),
-        child: Column(children: [
-          Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-            const Text('Reversement du jour', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15)),
-            _StatutBadge(statut: reversement['statut'] as String),
+  ConsumerState<_DejaSubmis> createState() => _DejaSubmisState();
+}
+
+class _DejaSubmisState extends ConsumerState<_DejaSubmis> {
+  bool _verif = false;
+  late String _waveStatut;
+
+  @override
+  void initState() {
+    super.initState();
+    _waveStatut = (widget.reversement['wave_payment_status'] ?? 'non_paye').toString();
+  }
+
+  Future<void> _verifier() async {
+    setState(() => _verif = true);
+    try {
+      final dio  = ref.read(dioProvider);
+      final resp = await dio.get('/reversements/${widget.reversement['id']}/statut-wave');
+      final s = (resp.data['wave_payment_status'] ?? 'processing').toString();
+      ref.invalidate(reversementTodayProvider);
+      ref.invalidate(mesReversementsProvider);
+      if (mounted) {
+        setState(() { _waveStatut = s; _verif = false; });
+        final msg = s == 'succeeded' ? 'Paiement Wave confirmé ✓'
+            : s == 'failed' ? 'Paiement Wave échoué — reprenez le reversement'
+            : 'Paiement Wave toujours en cours…';
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+      }
+    } catch (_) {
+      if (mounted) setState(() => _verif = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final r = widget.reversement;
+    return Padding(
+      padding: const EdgeInsets.all(20),
+      child: Column(children: [
+        Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16),
+              boxShadow: [BoxShadow(color: SimColors.blue.withValues(alpha: 0.06), blurRadius: 8)]),
+          child: Column(children: [
+            Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+              const Text('Reversement du jour', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15)),
+              _StatutBadge(statut: r['statut'] as String),
+            ]),
+            const SizedBox(height: 16),
+            Row(children: [
+              Expanded(child: _AmountCard('Attendu', _money(r['montant_attendu']), SimColors.blue, SimColors.blueTint)),
+              const SizedBox(width: 10),
+              Expanded(child: _AmountCard('Déclaré', _money(r['montant_declare']), SimColors.success, const Color(0xFFF0FDF4))),
+            ]),
+            const SizedBox(height: 12),
+            _EcartBadge(ecart: _money(r['ecart'])),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(color: SimColors.background, borderRadius: BorderRadius.circular(10)),
+              child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                const Text('Paiement Wave', style: TextStyle(color: SimColors.textSecondary, fontSize: 13)),
+                _WaveStatutBadge(statut: _waveStatut),
+              ]),
+            ),
           ]),
-          const SizedBox(height: 16),
-          Row(children: [
-            Expanded(child: _AmountCard('Attendu', _money(reversement['montant_attendu']), SimColors.blue, SimColors.blueTint)),
-            const SizedBox(width: 10),
-            Expanded(child: _AmountCard('Déclaré', _money(reversement['montant_declare']), SimColors.success, const Color(0xFFF0FDF4))),
-          ]),
-          const SizedBox(height: 12),
-          _EcartBadge(ecart: _money(reversement['ecart'])),
-        ]),
-      ),
-      const SizedBox(height: 16),
-      Container(
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(color: SimColors.blueTint, borderRadius: BorderRadius.circular(12)),
-        child: const Row(children: [
-          Icon(Icons.access_time, color: SimColors.blue, size: 16),
-          SizedBox(width: 8),
-          Text('En attente de validation par l\'administrateur',
-              style: TextStyle(color: SimColors.blue, fontSize: 13)),
-        ]),
-      ),
-    ]),
-  );
+        ),
+        const SizedBox(height: 16),
+
+        if (_waveStatut == 'failed')
+          SizedBox(width: double.infinity, child: ElevatedButton.icon(
+            onPressed: widget.onReprendre,
+            icon: const Icon(Icons.refresh),
+            label: const Text('Reprendre le paiement'),
+          ))
+        else if (_waveStatut == 'succeeded')
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(color: const Color(0xFFD1FAE5), borderRadius: BorderRadius.circular(12)),
+            child: const Row(children: [
+              Icon(Icons.check_circle, color: SimColors.success, size: 16),
+              SizedBox(width: 8),
+              Expanded(child: Text('Paiement confirmé — en attente de validation admin',
+                  style: TextStyle(color: SimColors.success, fontSize: 13))),
+            ]),
+          )
+        else
+          SizedBox(width: double.infinity, child: OutlinedButton.icon(
+            onPressed: _verif ? null : _verifier,
+            style: OutlinedButton.styleFrom(
+              minimumSize: const Size(0, 50),
+              side: const BorderSide(color: SimColors.blue),
+            ),
+            icon: _verif
+                ? const SizedBox(height: 16, width: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                : const Icon(Icons.refresh, color: SimColors.blue),
+            label: Text(_verif ? 'Vérification…' : 'Vérifier le paiement Wave',
+                style: const TextStyle(color: SimColors.blue)),
+          )),
+      ]),
+    );
+  }
+}
+
+class _WaveStatutBadge extends StatelessWidget {
+  final String statut;
+  const _WaveStatutBadge({required this.statut});
+
+  @override
+  Widget build(BuildContext context) {
+    final cfg = {
+      'succeeded':  ('Payé ✓',    const Color(0xFFD1FAE5), const Color(0xFF065F46)),
+      'processing': ('En cours…', const Color(0xFFFEF3C7), const Color(0xFF92400E)),
+      'failed':     ('Échoué',    const Color(0xFFFEE2E2), const Color(0xFF991B1B)),
+    }[statut] ?? ('Non payé', const Color(0xFFF3F4F6), const Color(0xFF6B7280));
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(color: cfg.$2, borderRadius: BorderRadius.circular(20)),
+      child: Text(cfg.$1, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: cfg.$3)),
+    );
+  }
 }
 
 class _AmountCard extends StatelessWidget {

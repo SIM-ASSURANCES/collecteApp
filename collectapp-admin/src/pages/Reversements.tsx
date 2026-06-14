@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { CheckCircle2, XCircle, AlertTriangle, Filter } from 'lucide-react';
+import { CheckCircle2, XCircle, AlertTriangle, Filter, RefreshCw } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../api/axios';
 import TopBar from '../components/layout/TopBar';
@@ -31,7 +31,20 @@ export default function Reversements() {
   const validerMut = useMutation({
     mutationFn: (id: number) => api.patch(`/reversements/${id}/valider`),
     onSuccess: () => { toast.success('Reversement validé !'); qc.invalidateQueries({ queryKey: ['reversements'] }); },
-    onError: () => toast.error('Erreur'),
+    onError: (err: any) =>
+      toast.error(err?.response?.data?.message || 'Validation impossible'),
+  });
+
+  const verifierMut = useMutation({
+    mutationFn: (id: number) => api.get(`/reversements/${id}/statut-wave`).then(r => r.data),
+    onSuccess: (data) => {
+      qc.invalidateQueries({ queryKey: ['reversements'] });
+      const s = data.wave_payment_status;
+      if (s === 'succeeded') toast.success('Paiement Wave confirmé ✓');
+      else if (s === 'failed') toast.error('Paiement Wave échoué');
+      else toast('Paiement Wave en cours…');
+    },
+    onError: () => toast.error('Vérification impossible'),
   });
 
   const rejeterMut = useMutation({
@@ -88,13 +101,13 @@ export default function Reversements() {
           <table className="sim-table w-full">
             <thead><tr>
               <th>Commercial</th><th>Déclaré</th><th>Attendu</th>
-              <th>Écart</th><th>Statut</th><th>Actions</th>
+              <th>Écart</th><th>Paiement Wave</th><th>Statut</th><th>Actions</th>
             </tr></thead>
             <tbody>
               {isLoading ? (
-                <tr><td colSpan={6} className="text-center py-10 text-gray-400">Chargement…</td></tr>
+                <tr><td colSpan={7} className="text-center py-10 text-gray-400">Chargement…</td></tr>
               ) : reversements.length === 0 ? (
-                <tr><td colSpan={6} className="text-center py-10 text-gray-400">Aucun reversement pour cette journée</td></tr>
+                <tr><td colSpan={7} className="text-center py-10 text-gray-400">Aucun reversement pour cette journée</td></tr>
               ) : reversements.map(r => {
                 const ecart = Number(r.ecart);
                 return (
@@ -114,6 +127,7 @@ export default function Reversements() {
                         </span>
                       )}
                     </td>
+                    <td><WaveStatusBadge statut={r.wave_payment_status} /></td>
                     <td>
                       <span className={
                         r.statut === 'valide'    ? 'sim-badge-paye' :
@@ -125,9 +139,23 @@ export default function Reversements() {
                     </td>
                     <td>
                       {r.statut === 'en_attente' && (
-                        <div className="flex items-center gap-2">
-                          <button onClick={() => { if (confirm('Valider ce reversement ?')) validerMut.mutate(r.id); }}
-                                  title="Valider" className="p-1.5 rounded-lg hover:bg-green-50 transition text-green-600">
+                        <div className="flex items-center gap-1.5">
+                          <button onClick={() => verifierMut.mutate(r.id)}
+                                  title="Vérifier le paiement Wave"
+                                  className="p-1.5 rounded-lg hover:bg-blue-50 transition text-blue-600">
+                            <RefreshCw size={15} className={verifierMut.isPending ? 'animate-spin' : ''} />
+                          </button>
+                          <button
+                            onClick={() => {
+                              if (r.wave_payment_status !== 'succeeded') {
+                                toast.error('Paiement Wave non confirmé : validation impossible.');
+                                return;
+                              }
+                              if (confirm('Valider ce reversement ?')) validerMut.mutate(r.id);
+                            }}
+                            disabled={r.wave_payment_status !== 'succeeded'}
+                            title={r.wave_payment_status === 'succeeded' ? 'Valider' : 'Paiement Wave non confirmé'}
+                            className="p-1.5 rounded-lg transition disabled:opacity-30 disabled:cursor-not-allowed text-green-600 hover:bg-green-50">
                             <CheckCircle2 size={16} />
                           </button>
                           <button onClick={() => { setSelected(r); setModal('rejeter'); }}
@@ -166,5 +194,20 @@ export default function Reversements() {
         </div>
       </Modal>
     </div>
+  );
+}
+
+function WaveStatusBadge({ statut }: { statut?: string }) {
+  const map: Record<string, { label: string; bg: string; color: string }> = {
+    succeeded:  { label: 'Payé ✓',      bg: '#D1FAE5', color: '#065F46' },
+    processing: { label: 'En cours…',   bg: '#FEF3C7', color: '#92400E' },
+    failed:     { label: 'Échoué',      bg: '#FEE2E2', color: '#991B1B' },
+    non_paye:   { label: 'Non payé',    bg: '#F3F4F6', color: '#6B7280' },
+  };
+  const s = map[statut ?? 'non_paye'] ?? map.non_paye;
+  return (
+    <span className="text-xs font-semibold px-2.5 py-1 rounded-full" style={{ background: s.bg, color: s.color }}>
+      {s.label}
+    </span>
   );
 }

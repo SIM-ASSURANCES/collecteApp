@@ -7,8 +7,8 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
-  Wallet2, CheckCircle2, TrendingDown, TrendingUp, Loader2, Clock,
-  Smartphone, History,
+  Wallet2, CheckCircle2, TrendingDown, TrendingUp, Loader2,
+  Smartphone, History, RefreshCw,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../../api/axios';
@@ -26,6 +26,7 @@ interface ReversementItem {
   montant_declare: number;
   ecart: number;
   numero_wave?: string | null;
+  wave_payment_status?: 'non_paye' | 'processing' | 'succeeded' | 'failed';
   statut: string;
   date: string;
   horodatage: string;
@@ -41,7 +42,25 @@ export default function CommercialReversement() {
   const [montantDeclare, setMontantDeclare] = useState('');
   const [numeroWave, setNumeroWave] = useState('');
   const [waveLoading, setWaveLoading] = useState(false);
+  const [verifLoading, setVerifLoading] = useState(false);
   const [reversementSoumis, setReversementSoumis] = useState<ReversementItem | null>(null);
+
+  const verifierStatut = async (id: number) => {
+    setVerifLoading(true);
+    try {
+      const { data } = await api.get(`/reversements/${id}/statut-wave`);
+      queryClient.invalidateQueries({ queryKey: ['reversement-today'] });
+      queryClient.invalidateQueries({ queryKey: ['mes-reversements'] });
+      const s = data.wave_payment_status;
+      if (s === 'succeeded') toast.success('Paiement Wave confirmé ✓');
+      else if (s === 'failed') toast.error('Paiement Wave échoué — reprenez le reversement');
+      else toast('Paiement Wave toujours en cours…');
+    } catch {
+      toast.error('Vérification impossible');
+    } finally {
+      setVerifLoading(false);
+    }
+  };
 
   // Paiement Wave obligatoire : crée la session, ouvre Wave, puis enregistre le reversement
   const payerEtReverser = async () => {
@@ -54,6 +73,7 @@ export default function CommercialReversement() {
         montant_declare: montantDeclareNum,
         montant_attendu: montantAttendu,
         numero_wave: numeroWave.trim() || data.id,
+        wave_session_id: data.id,
       });
     } catch (e: any) {
       toast.error(e?.response?.data?.message || 'Paiement Wave impossible. Réessayez.');
@@ -87,7 +107,7 @@ export default function CommercialReversement() {
   });
 
   const reversementMutation = useMutation({
-    mutationFn: (data: { montant_declare: number; montant_attendu: number; numero_wave: string }) =>
+    mutationFn: (data: { montant_declare: number; montant_attendu: number; numero_wave: string; wave_session_id?: string }) =>
       api.post('/reversements', data).then(r => r.data),
     onSuccess: (data) => {
       setReversementSoumis(data);
@@ -196,11 +216,32 @@ export default function CommercialReversement() {
             </div>
           )}
           <EcartCard ecart={reversementExistant.ecart} />
+
+          {/* Statut du paiement Wave */}
+          <div className="flex items-center justify-between px-4 py-2.5 rounded-xl text-sm"
+               style={{ background: '#F4F6FA' }}>
+            <span className="text-gray-600">Paiement Wave</span>
+            <WaveStatusPill statut={reversementExistant.wave_payment_status} />
+          </div>
         </div>
-        <div className="flex items-center gap-2 px-4 py-3 rounded-xl text-sm" style={{ background: '#EBF3FC', color: '#004B9C' }}>
-          <Clock size={16} />
-          <p>En attente de validation par l'administrateur</p>
-        </div>
+
+        {reversementExistant.wave_payment_status === 'failed' ? (
+          <button onClick={() => { setEtape('saisie'); setMontantDeclare(String(reversementExistant.montant_declare)); }}
+                  className="sim-btn-primary w-full py-3 rounded-xl flex items-center justify-center gap-2">
+            <RefreshCw size={16} /> Reprendre le paiement
+          </button>
+        ) : reversementExistant.wave_payment_status === 'succeeded' ? (
+          <div className="flex items-center gap-2 px-4 py-3 rounded-xl text-sm" style={{ background: '#D1FAE5', color: '#065F46' }}>
+            <CheckCircle2 size={16} />
+            <p>Paiement confirmé — en attente de validation admin</p>
+          </div>
+        ) : (
+          <button onClick={() => verifierStatut(reversementExistant.id)} disabled={verifLoading}
+                  className="sim-btn-secondary w-full py-3 rounded-xl flex items-center justify-center gap-2">
+            {verifLoading ? <><Loader2 size={16} className="animate-spin" /> Vérification…</>
+                          : <><RefreshCw size={16} /> Vérifier le paiement Wave</>}
+          </button>
+        )}
       </div>
     );
   }
@@ -386,6 +427,21 @@ function EcartCard({ ecart }: { ecart: number }) {
         {isExact ? '—' : `${ecart > 0 ? '+' : ''}${ecart.toLocaleString()} F`}
       </span>
     </div>
+  );
+}
+
+function WaveStatusPill({ statut }: { statut?: string }) {
+  const map: Record<string, { label: string; bg: string; color: string }> = {
+    succeeded:  { label: 'Payé ✓',    bg: '#D1FAE5', color: '#065F46' },
+    processing: { label: 'En cours…', bg: '#FEF3C7', color: '#92400E' },
+    failed:     { label: 'Échoué',    bg: '#FEE2E2', color: '#991B1B' },
+    non_paye:   { label: 'Non payé',  bg: '#F3F4F6', color: '#6B7280' },
+  };
+  const s = map[statut ?? 'non_paye'] ?? map.non_paye;
+  return (
+    <span className="text-xs font-semibold px-2.5 py-1 rounded-full" style={{ background: s.bg, color: s.color }}>
+      {s.label}
+    </span>
   );
 }
 

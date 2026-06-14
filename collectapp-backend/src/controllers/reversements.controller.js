@@ -6,28 +6,75 @@ const logger = require('../config/logger');
 const today = () =>
   new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Abidjan' }).format(new Date());
 
+// Interroge Wave sur le statut d'une session et met à jour le reversement.
+// Renvoie : 'succeeded' | 'processing' | 'failed' | 'non_paye'
+async function verifierWave(reversement) {
+  if (!reversement.wave_session_id || !process.env.WAVE_API_KEY) {
+    return reversement.wave_payment_status || 'non_paye';
+  }
+  try {
+    const resp = await fetch(
+      `https://api.wave.com/v1/checkout/sessions/${encodeURIComponent(reversement.wave_session_id)}`,
+      { headers: { Authorization: `Bearer ${process.env.WAVE_API_KEY}` } }
+    );
+    const data = await resp.json();
+    if (!resp.ok) {
+      logger.warn(`Wave statut reversement #${reversement.id} : HTTP ${resp.status}`);
+      return reversement.wave_payment_status || 'processing';
+    }
+    // payment_status Wave : 'processing' | 'succeeded' | 'cancelled' | 'expired' ...
+    let statut;
+    if (data.payment_status === 'succeeded') statut = 'succeeded';
+    else if (data.payment_status === 'processing') statut = 'processing';
+    else statut = 'failed';
+
+    if (statut !== reversement.wave_payment_status) {
+      await db('reversements').where({ id: reversement.id }).update({
+        wave_payment_status: statut, updated_at: new Date(),
+      });
+    }
+    return statut;
+  } catch (err) {
+    logger.warn(`Vérification Wave reversement #${reversement.id} échouée : ${err.message}`);
+    return reversement.wave_payment_status || 'processing';
+  }
+}
+
 exports.declarer = async (req, res, next) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
 
-  const { montant_declare, numero_wave } = req.body;
+  const { montant_declare, numero_wave, wave_session_id } = req.body;
   try {
-    // Un seul reversement par jour
-    const existant = await db('reversements')
-      .where({ commercial_id: req.user.id, date: today() })
-      .first();
-    if (existant) {
-      return res.status(409).json({ message: 'Un reversement a déjà été soumis aujourd\'hui.' });
-    }
-
     // Montant attendu = espèces uniquement (le Wave est déjà encaissé sur le compte SIM)
     const { sum } = await db('paiements')
       .where({ commercial_id: req.user.id, date: today(), mode: 'especes' })
       .sum('montant as sum')
       .first();
-
     const montant_attendu = parseFloat(sum || 0);
     const ecart = montant_attendu - montant_declare;
+
+    const existant = await db('reversements')
+      .where({ commercial_id: req.user.id, date: today() })
+      .first();
+
+    if (existant) {
+      // Bloque si un paiement est déjà confirmé ou validé ; sinon on autorise la reprise
+      if (existant.wave_payment_status === 'succeeded' || existant.statut === 'valide') {
+        return res.status(409).json({ message: 'Le reversement du jour est déjà payé/validé.' });
+      }
+      const [maj] = await db('reversements').where({ id: existant.id }).update({
+        montant_declare, montant_attendu, ecart,
+        numero_wave: numero_wave || null,
+        wave_session_id: wave_session_id || null,
+        wave_payment_status: 'processing',
+        statut: 'en_attente',
+        motif_rejet: null,
+        horodatage: new Date(), updated_at: new Date(),
+      }).returning('*');
+      logger.info(`Reversement #${existant.id} repris par commercial #${req.user.id}`);
+      return res.status(200).json(maj);
+    }
 
     const [reversement] = await db('reversements')
       .insert({
@@ -37,16 +84,29 @@ exports.declarer = async (req, res, next) => {
         montant_attendu,
         ecart,
         numero_wave: numero_wave || null,
+        wave_session_id: wave_session_id || null,
+        wave_payment_status: 'processing',
         statut: 'en_attente',
         horodatage: new Date(),
       })
       .returning('*');
 
-    if (ecart > 0) {
-      logger.warn(`Reversement partiel #${reversement.id} — écart de ${ecart} FCFA`);
-    }
-    logger.info(`Reversement #${reversement.id} déclaré par commercial #${req.user.id} (Wave ${numero_wave || '—'})`);
+    if (ecart > 0) logger.warn(`Reversement partiel #${reversement.id} — écart de ${ecart} FCFA`);
+    logger.info(`Reversement #${reversement.id} déclaré par commercial #${req.user.id}`);
     res.status(201).json(reversement);
+  } catch (err) { next(err); }
+};
+
+// Le commercial (ou l'admin) rafraîchit le statut de paiement Wave d'un reversement
+exports.statutWave = async (req, res, next) => {
+  try {
+    const r = await db('reversements').where({ id: req.params.id }).first();
+    if (!r) return res.status(404).json({ message: 'Reversement introuvable.' });
+    if (req.user.role === 'COMMERCIAL' && r.commercial_id !== req.user.id) {
+      return res.status(403).json({ message: 'Accès refusé.' });
+    }
+    const wave_payment_status = await verifierWave(r);
+    res.json({ id: r.id, wave_payment_status });
   } catch (err) { next(err); }
 };
 
@@ -111,12 +171,27 @@ exports.list = async (req, res, next) => {
 
 exports.valider = async (req, res, next) => {
   try {
-    const [r] = await db('reversements')
-      .where({ id: req.params.id })
+    const r = await db('reversements').where({ id: req.params.id }).first();
+    if (!r) return res.status(404).json({ message: 'Reversement introuvable.' });
+
+    // L'admin ne peut valider que si Wave a réellement confirmé le paiement
+    const statutWave = await verifierWave(r);
+    if (statutWave !== 'succeeded') {
+      return res.status(409).json({
+        message: statutWave === 'failed'
+          ? 'Paiement Wave échoué : validation impossible. Le commercial doit reprendre le reversement.'
+          : 'Paiement Wave non encore confirmé par Wave. Validation impossible pour le moment.',
+        wave_payment_status: statutWave,
+        code: 'WAVE_NON_CONFIRME',
+      });
+    }
+
+    const [maj] = await db('reversements')
+      .where({ id: r.id })
       .update({ statut: 'valide', valide_par: req.user.id, valide_le: new Date() })
       .returning('*');
-    if (!r) return res.status(404).json({ message: 'Reversement introuvable.' });
-    res.json(r);
+    logger.info(`Reversement #${r.id} validé par admin #${req.user.id} (Wave confirmé)`);
+    res.json(maj);
   } catch (err) { next(err); }
 };
 

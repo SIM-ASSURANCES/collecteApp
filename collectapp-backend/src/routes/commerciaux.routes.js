@@ -22,5 +22,7 @@ router.post(
 router.put('/:id', param('id').isInt(), ctrl.update);
 router.patch('/:id/reassigner', param('id').isInt(), ctrl.reassignerCotisants);
 router.patch('/:id/desactiver', param('id').isInt(), ctrl.desactiver);
+router.patch('/:id/activer', param('id').isInt(), ctrl.activer);
+router.delete('/:id', authorize('ADMIN'), param('id').isInt(), ctrl.supprimer);
 
 module.exports = router;

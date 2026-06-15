@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Search, Edit2, UserX, History, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Plus, Search, Edit2, UserX, UserCheck, Trash2, History, ChevronLeft, ChevronRight } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../api/axios';
 import TopBar from '../components/layout/TopBar';
@@ -100,6 +100,18 @@ export default function Cotisants() {
     onError: () => toast.error('Erreur lors de la désactivation'),
   });
 
+  const activerMut = useMutation({
+    mutationFn: (id: number) => api.patch(`/cotisants/${id}/activer`),
+    onSuccess: () => { toast.success('Cotisant réactivé.'); qc.invalidateQueries({ queryKey: ['cotisants'] }); },
+    onError: () => toast.error('Erreur lors de la réactivation'),
+  });
+
+  const supprimerMut = useMutation({
+    mutationFn: (id: number) => api.delete(`/cotisants/${id}`),
+    onSuccess: () => { toast.success('Cotisant supprimé.'); qc.invalidateQueries({ queryKey: ['cotisants'] }); },
+    onError: (e: unknown) => toast.error((e as { response?: { data?: { message?: string } } })?.response?.data?.message ?? 'Suppression impossible'),
+  });
+
   return (
     <div className="flex-1 overflow-auto">
       <TopBar title="Gestion des Cotisants" subtitle={`${cotisants.length} cotisant(s) trouvé(s)`} />
@@ -156,13 +168,23 @@ export default function Cotisants() {
                               className="p-1.5 rounded-lg hover:bg-blue-50 transition" style={{ color: '#51AEE2' }}>
                         <History size={15} />
                       </button>
-                      {c.actif && (
+                      {c.actif ? (
                         <button title="Désactiver" onClick={() => {
                           if (confirm(`Désactiver ${c.nom} ?`)) desactiverMut.mutate(c.id);
-                        }} className="p-1.5 rounded-lg hover:bg-red-50 transition text-red-500">
+                        }} className="p-1.5 rounded-lg hover:bg-amber-50 transition text-amber-600">
                           <UserX size={15} />
                         </button>
+                      ) : (
+                        <button title="Réactiver" onClick={() => activerMut.mutate(c.id)}
+                                className="p-1.5 rounded-lg hover:bg-green-50 transition text-green-600">
+                          <UserCheck size={15} />
+                        </button>
                       )}
+                      <button title="Supprimer" onClick={() => {
+                        if (confirm(`Supprimer définitivement ${c.nom} ? Cette action est irréversible.`)) supprimerMut.mutate(c.id);
+                      }} className="p-1.5 rounded-lg hover:bg-red-50 transition text-red-600">
+                        <Trash2 size={15} />
+                      </button>
                     </div>
                   </td>
                 </tr>

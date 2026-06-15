@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Edit2, UserX, Users, ArrowRightLeft } from 'lucide-react';
+import { Plus, Edit2, UserX, UserCheck, Trash2, Users, ArrowRightLeft } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../api/axios';
 import TopBar from '../components/layout/TopBar';
@@ -80,6 +80,17 @@ export default function Commerciaux() {
     onSuccess: () => { toast.success('Commercial désactivé.'); qc.invalidateQueries({ queryKey: ['commerciaux'] }); },
   });
 
+  const activerMut = useMutation({
+    mutationFn: (id: number) => api.patch(`/commerciaux/${id}/activer`),
+    onSuccess: () => { toast.success('Commercial réactivé.'); qc.invalidateQueries({ queryKey: ['commerciaux'] }); },
+  });
+
+  const supprimerMut = useMutation({
+    mutationFn: (id: number) => api.delete(`/commerciaux/${id}`),
+    onSuccess: () => { toast.success('Commercial supprimé.'); qc.invalidateQueries({ queryKey: ['commerciaux'] }); },
+    onError: (e: unknown) => toast.error((e as { response?: { data?: { message?: string } } })?.response?.data?.message ?? 'Suppression impossible'),
+  });
+
   const reassignMut = useMutation({
     mutationFn: () => api.patch(`/commerciaux/${selected!.id}/reassigner`, {
       cotisant_ids: reassignIds,
@@ -141,12 +152,23 @@ export default function Commerciaux() {
                           style={{ color: '#51AEE2', borderColor: '#51AEE2' }}>
                     <ArrowRightLeft size={13} className="inline mr-1" />Réassigner
                   </button>
-                  {c.actif && (
-                    <button onClick={() => { if (confirm(`Désactiver ${c.nom} ?`)) desactiverMut.mutate(c.id); }}
-                            className="py-1.5 px-2.5 rounded-lg border border-red-200 text-red-500 hover:bg-red-50 transition text-xs">
+                  {c.actif ? (
+                    <button title="Désactiver" onClick={() => { if (confirm(`Désactiver ${c.nom} ?`)) desactiverMut.mutate(c.id); }}
+                            className="py-1.5 px-2.5 rounded-lg border border-amber-200 text-amber-600 hover:bg-amber-50 transition text-xs">
                       <UserX size={13} />
                     </button>
+                  ) : (
+                    <button title="Réactiver" onClick={() => activerMut.mutate(c.id)}
+                            className="py-1.5 px-2.5 rounded-lg border border-green-200 text-green-600 hover:bg-green-50 transition text-xs">
+                      <UserCheck size={13} />
+                    </button>
                   )}
+                  <button title="Supprimer" onClick={() => {
+                            if (confirm(`Supprimer définitivement ${c.nom} ? Cette action est irréversible.`)) supprimerMut.mutate(c.id);
+                          }}
+                          className="py-1.5 px-2.5 rounded-lg border border-red-200 text-red-600 hover:bg-red-50 transition text-xs">
+                    <Trash2 size={13} />
+                  </button>
                 </div>
               </div>
             ))}

@@ -33,5 +33,7 @@ router.put(
 );
 
 router.patch('/:id/desactiver', authorize('ADMIN', 'SUPERVISEUR'), param('id').isInt(), ctrl.desactiver);
+router.patch('/:id/activer', authorize('ADMIN', 'SUPERVISEUR'), param('id').isInt(), ctrl.activer);
+router.delete('/:id', authorize('ADMIN'), param('id').isInt(), ctrl.supprimer);
 
 module.exports = router;

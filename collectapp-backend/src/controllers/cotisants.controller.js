@@ -160,3 +160,34 @@ exports.desactiver = async (req, res, next) => {
     res.json({ message: 'Cotisant désactivé.', cotisant });
   } catch (err) { next(err); }
 };
+
+exports.activer = async (req, res, next) => {
+  try {
+    const [cotisant] = await db('cotisants')
+      .where({ id: req.params.id })
+      .update({ actif: true, updated_at: new Date() })
+      .returning('*');
+    if (!cotisant) return res.status(404).json({ message: 'Cotisant introuvable.' });
+    logger.info(`Cotisant #${cotisant.id} réactivé par admin #${req.user.id}`);
+    res.json({ message: 'Cotisant réactivé.', cotisant });
+  } catch (err) { next(err); }
+};
+
+exports.supprimer = async (req, res, next) => {
+  try {
+    const id = Number(req.params.id);
+    const cotisant = await db('cotisants').where({ id }).first();
+    if (!cotisant) return res.status(404).json({ message: 'Cotisant introuvable.' });
+
+    const [{ n }] = await db('paiements').where({ cotisant_id: id }).count('id as n');
+    if (Number(n) > 0) {
+      return res.status(409).json({
+        message: `Suppression impossible : ${n} paiement(s) enregistré(s) pour ce cotisant. Désactivez-le plutôt.`,
+        code: 'A_DES_PAIEMENTS',
+      });
+    }
+    await db('cotisants').where({ id }).del();
+    logger.info(`Cotisant #${id} supprimé par admin #${req.user.id}`);
+    res.json({ message: 'Cotisant supprimé.' });
+  } catch (err) { next(err); }
+};

@@ -86,3 +86,36 @@ exports.desactiver = async (req, res, next) => {
     res.json({ message: 'Commercial désactivé.', commercial: u });
   } catch (err) { next(err); }
 };
+
+exports.activer = async (req, res, next) => {
+  try {
+    const [u] = await db('utilisateurs')
+      .where({ id: req.params.id, role: 'COMMERCIAL' })
+      .update({ actif: true, updated_at: new Date() })
+      .returning('id', 'nom');
+    if (!u) return res.status(404).json({ message: 'Commercial introuvable.' });
+    res.json({ message: 'Commercial réactivé.', commercial: u });
+  } catch (err) { next(err); }
+};
+
+exports.supprimer = async (req, res, next) => {
+  try {
+    const id = Number(req.params.id);
+    const u = await db('utilisateurs').where({ id, role: 'COMMERCIAL' }).first();
+    if (!u) return res.status(404).json({ message: 'Commercial introuvable.' });
+
+    const [{ nc }] = await db('cotisants').where({ commercial_id: id }).count('id as nc');
+    const [{ np }] = await db('paiements').where({ commercial_id: id }).count('id as np');
+    const [{ nr }] = await db('reversements').where({ commercial_id: id }).count('id as nr');
+    if (Number(nc) > 0 || Number(np) > 0 || Number(nr) > 0) {
+      return res.status(409).json({
+        message: `Suppression impossible : ${nc} cotisant(s), ${np} paiement(s) et ${nr} reversement(s) liés. `
+          + 'Réassignez ses cotisants puis désactivez-le.',
+        code: 'A_DES_LIENS',
+      });
+    }
+    await db('utilisateurs').where({ id }).del();
+    logger.info(`Commercial #${id} supprimé par admin #${req.user.id}`);
+    res.json({ message: 'Commercial supprimé.' });
+  } catch (err) { next(err); }
+};

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -44,9 +46,20 @@ class _ReversementScreenState extends ConsumerState<ReversementScreen> {
   bool _historique = false;
   bool _reprendre = false;       // forcer le formulaire malgré un reversement existant
   Map<String, dynamic>? _result;
+  Timer? _autoRefresh;
 
   @override
-  void dispose() { _ctrl.dispose(); _waveCtrl.dispose(); super.dispose(); }
+  void initState() {
+    super.initState();
+    _autoRefresh = Timer.periodic(const Duration(seconds: 10), (_) {
+      ref.invalidate(reversementTodayProvider);
+      ref.invalidate(sommairePaiementsProvider);
+      ref.invalidate(mesReversementsProvider);
+    });
+  }
+
+  @override
+  void dispose() { _autoRefresh?.cancel(); _ctrl.dispose(); _waveCtrl.dispose(); super.dispose(); }
 
   // Paiement Wave OBLIGATOIRE : crée la session, ouvre Wave, puis enregistre le reversement
   Future<void> _payerEtReverser(double montantAttendu) async {
@@ -433,15 +446,23 @@ class _DejaSubmis extends ConsumerStatefulWidget {
 class _DejaSubmisState extends ConsumerState<_DejaSubmis> {
   bool _verif = false;
   late String _waveStatut;
+  Timer? _autoCheck;
 
   @override
   void initState() {
     super.initState();
     _waveStatut = (widget.reversement['wave_payment_status'] ?? 'non_paye').toString();
+    // Tant que le paiement est « en cours », on interroge Wave toutes les 10 s
+    _autoCheck = Timer.periodic(const Duration(seconds: 10), (_) {
+      if (_waveStatut == 'processing') _verifier(silencieux: true);
+    });
   }
 
-  Future<void> _verifier() async {
-    setState(() => _verif = true);
+  @override
+  void dispose() { _autoCheck?.cancel(); super.dispose(); }
+
+  Future<void> _verifier({bool silencieux = false}) async {
+    if (!silencieux) setState(() => _verif = true);
     try {
       final dio  = ref.read(dioProvider);
       final resp = await dio.get('/reversements/${widget.reversement['id']}/statut-wave');
@@ -450,13 +471,15 @@ class _DejaSubmisState extends ConsumerState<_DejaSubmis> {
       ref.invalidate(mesReversementsProvider);
       if (mounted) {
         setState(() { _waveStatut = s; _verif = false; });
-        final msg = s == 'succeeded' ? 'Paiement Wave confirmé ✓'
-            : s == 'failed' ? 'Paiement Wave échoué — reprenez le reversement'
-            : 'Paiement Wave toujours en cours…';
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+        if (!silencieux) {
+          final msg = s == 'succeeded' ? 'Paiement Wave confirmé ✓'
+              : s == 'failed' ? 'Paiement Wave échoué — reprenez le reversement'
+              : 'Paiement Wave toujours en cours…';
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+        }
       }
     } catch (_) {
-      if (mounted) setState(() => _verif = false);
+      if (mounted && !silencieux) setState(() => _verif = false);
     }
   }
 

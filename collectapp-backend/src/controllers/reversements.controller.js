@@ -28,6 +28,13 @@ async function verifierWave(reversement) {
     else if (data.payment_status === 'processing') statut = 'processing';
     else statut = 'failed';
 
+    // Délai de grâce : un paiement encore « en cours » 5 min après la tentative
+    // est considéré comme échoué → le commercial peut reprendre.
+    if (statut === 'processing' && reversement.horodatage) {
+      const ageMs = Date.now() - new Date(reversement.horodatage).getTime();
+      if (ageMs > 5 * 60 * 1000) statut = 'failed';
+    }
+
     if (statut !== reversement.wave_payment_status) {
       await db('reversements').where({ id: reversement.id }).update({
         wave_payment_status: statut, updated_at: new Date(),

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -41,6 +43,22 @@ class MaListeScreen extends ConsumerStatefulWidget {
 class _MaListeScreenState extends ConsumerState<MaListeScreen> {
   String _search = '';
   String _filtre = 'tous'; // tous | payes | impayes
+  Timer? _autoRefresh;
+
+  @override
+  void initState() {
+    super.initState();
+    // Auto-refresh toutes les 10 secondes
+    _autoRefresh = Timer.periodic(const Duration(seconds: 10), (_) {
+      ref.invalidate(maListeProvider);
+    });
+  }
+
+  @override
+  void dispose() {
+    _autoRefresh?.cancel();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {

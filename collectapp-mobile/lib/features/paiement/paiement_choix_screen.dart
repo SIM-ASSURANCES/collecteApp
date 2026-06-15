@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -16,12 +18,34 @@ final historiqueCotisantProvider =
   return Map<String, dynamic>.from(resp.data as Map);
 });
 
-class PaiementChoixScreen extends ConsumerWidget {
+class PaiementChoixScreen extends ConsumerStatefulWidget {
   final Map<String, dynamic> cotisant;
   const PaiementChoixScreen({super.key, required this.cotisant});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<PaiementChoixScreen> createState() => _PaiementChoixScreenState();
+}
+
+class _PaiementChoixScreenState extends ConsumerState<PaiementChoixScreen> {
+  Timer? _autoRefresh;
+
+  @override
+  void initState() {
+    super.initState();
+    _autoRefresh = Timer.periodic(const Duration(seconds: 10), (_) {
+      ref.invalidate(historiqueCotisantProvider(widget.cotisant['id'] as int));
+    });
+  }
+
+  @override
+  void dispose() {
+    _autoRefresh?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cotisant = widget.cotisant;
     final paye     = cotisant['paye_aujourd_hui'] == true;
     final montant  = double.tryParse(cotisant['montant_journalier'].toString()) ?? 0;
     final initiale = (cotisant['nom'] as String).substring(0, 1).toUpperCase();

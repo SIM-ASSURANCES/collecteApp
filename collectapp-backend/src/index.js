@@ -40,13 +40,15 @@ app.use('/api', rateLimit({
   message: { message: 'Trop de requêtes, réessayez dans un instant.' },
 }));
 
-// Rate-limiting renforcé sur l'authentification (anti brute-force)
+// Rate-limiting renforcé sur l'authentification (anti brute-force).
+// Seules les tentatives ÉCHOUÉES comptent → une connexion réussie ne bloque jamais.
 app.use('/api/auth/login', rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 10,
+  max: 30,
+  skipSuccessfulRequests: true,
   standardHeaders: true,
   legacyHeaders: false,
-  message: { message: 'Trop de tentatives de connexion. Réessayez plus tard.' },
+  message: { message: 'Trop de tentatives de connexion. Réessayez dans 15 minutes.' },
 }));
 
 // Documentation API — désactivée en production (évite la divulgation d'informations)

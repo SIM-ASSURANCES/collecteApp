@@ -1,6 +1,6 @@
-import { useCallback } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Users, CheckCircle2, XCircle, TrendingUp, Smartphone, Banknote, Clock } from 'lucide-react';
+import { Users, CheckCircle2, XCircle, TrendingUp, Smartphone, Banknote, Clock, Wallet, CalendarRange } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
 import api from '../api/axios';
 import { useSSE } from '../hooks/useSSE';
@@ -26,12 +26,39 @@ function StatCard({ icon: Icon, label, value, sub, color, bg }: {
 }
 
 const COLORS = ['#004B9C', '#51AEE2', '#7EC8E3', '#E86B1F'];
-const DAYS_FR = ['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'];
+
+type PeriodeKey = 'jour' | 'semaine' | 'mois' | 'annee' | 'perso';
+
+// Calcule la plage [debut, fin] (format YYYY-MM-DD) pour une période
+function calcPeriode(key: PeriodeKey, anneeSel: number): { debut: string; fin: string } | null {
+  const fmt = (d: Date) => d.toISOString().slice(0, 10);
+  const now = new Date();
+  if (key === 'jour') return null; // pas de filtre période → vue du jour
+  if (key === 'semaine') {
+    const d = new Date(now); const day = (d.getDay() + 6) % 7; // lundi = 0
+    d.setDate(d.getDate() - day);
+    return { debut: fmt(d), fin: fmt(now) };
+  }
+  if (key === 'mois') {
+    return { debut: fmt(new Date(now.getFullYear(), now.getMonth(), 1)), fin: fmt(now) };
+  }
+  if (key === 'annee' || key === 'perso') {
+    return { debut: `${anneeSel}-01-01`, fin: `${anneeSel}-12-31` };
+  }
+  return null;
+}
 
 export default function Dashboard() {
+  const [periode, setPeriode] = useState<PeriodeKey>('jour');
+  const anneeCourante = new Date().getFullYear();
+  const [annee, setAnnee] = useState(anneeCourante);
+
+  const plage = useMemo(() => calcPeriode(periode, annee), [periode, annee]);
+  const periodeQs = plage ? `?debut=${plage.debut}&fin=${plage.fin}` : '';
+
   const { data, refetch } = useQuery<DashboardData>({
-    queryKey: ['dashboard'],
-    queryFn: () => api.get('/stats/dashboard').then(r => r.data),
+    queryKey: ['dashboard', periodeQs],
+    queryFn: () => api.get(`/stats/dashboard${periodeQs}`).then(r => r.data),
     refetchInterval: 60_000,
   });
 
@@ -76,6 +103,46 @@ export default function Dashboard() {
       <TopBar title="Tableau de bord" subtitle={taux?.date} />
 
       <div className="p-6 space-y-6">
+        {/* Filtres de période */}
+        <div className="sim-card p-4 flex flex-wrap items-center gap-3">
+          <div className="flex items-center gap-2">
+            <CalendarRange size={16} style={{ color: '#004B9C' }} />
+            <span className="text-sm font-medium" style={{ color: '#004B9C' }}>Période :</span>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {([['jour', "Aujourd'hui"], ['semaine', 'Cette semaine'], ['mois', 'Ce mois'], ['annee', 'Année']] as [PeriodeKey, string][]).map(([k, label]) => (
+              <button key={k} onClick={() => setPeriode(k)}
+                      className="px-3 py-1.5 rounded-lg text-sm font-semibold transition"
+                      style={periode === k ? { background: '#004B9C', color: 'white' } : { background: '#EBF3FC', color: '#004B9C' }}>
+                {label}
+              </button>
+            ))}
+          </div>
+          {(periode === 'annee') && (
+            <select className="sim-input w-auto ml-1" value={annee} onChange={e => setAnnee(parseInt(e.target.value))}>
+              {Array.from({ length: 5 }, (_, i) => anneeCourante - i).map(y => (
+                <option key={y} value={y}>{y}</option>
+              ))}
+            </select>
+          )}
+          {plage && data?.ca_periode != null && (
+            <div className="ml-auto text-right">
+              <p className="text-xs text-gray-500">CA collecté sur la période</p>
+              <p className="font-bold text-lg" style={{ color: '#004B9C' }}>
+                {data.ca_periode.toLocaleString()} FCFA
+                <span className="text-xs text-gray-400 font-normal ml-2">{data.nombre_paiements_periode} paiement(s)</span>
+              </p>
+            </div>
+          )}
+        </div>
+
+        {/* Cartes CA globales */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <StatCard icon={Wallet}     label="CA collecté du jour"      value={`${(data?.ca_collecte_jour ?? 0).toLocaleString()} F`}     sub="global, aujourd'hui" color="#059669" bg="#D1FAE5" />
+          <StatCard icon={Clock}      label="CA non collecté du jour"  value={`${(data?.ca_non_collecte_jour ?? 0).toLocaleString()} F`} sub="reste à encaisser"   color="#DC2626" bg="#FEE2E2" />
+          <StatCard icon={TrendingUp} label="CA total collecté"        value={`${(data?.ca_total ?? 0).toLocaleString()} F`}            sub="toutes périodes"     color="#004B9C" bg="#EBF3FC" />
+        </div>
+
         {/* Bande de statut collecte */}
         <div className="sim-card p-4 flex items-center gap-4" style={{ borderLeft: '4px solid #004B9C' }}>
           <div className="flex-1">

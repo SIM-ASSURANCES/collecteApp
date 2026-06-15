@@ -1,11 +1,14 @@
 const db = require('../config/db');
 const sseClients = require('../utils/sseClients');
 
-const today = () => new Date().toISOString().slice(0, 10);
+const today = () =>
+  new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Abidjan' }).format(new Date());
 
 exports.dashboard = async (req, res, next) => {
   try {
     const dateJour = today();
+    const { debut, fin } = req.query; // période optionnelle
+
     const [totalActifs] = await db('cotisants').where({ actif: true }).count('id as count');
     const [payes] = await db('paiements')
       .where({ date: dateJour })
@@ -20,12 +23,49 @@ exports.dashboard = async (req, res, next) => {
 
     const nonPayes = parseInt(totalActifs.count) - parseInt(payes.count);
 
+    // CA collecté du jour (global)
+    const [{ s: caJour }] = await db('paiements')
+      .where({ date: dateJour, statut: 'paye' }).sum('montant as s');
+
+    // CA non collecté du jour (global) = somme des cotisations des cotisants
+    // actifs n'ayant pas payé aujourd'hui
+    const [{ s: attenduActifs }] = await db('cotisants').where({ actif: true }).sum('montant_journalier as s');
+    const cotisantsPayes = await db('paiements')
+      .where({ date: dateJour, statut: 'paye' })
+      .join('cotisants', 'paiements.cotisant_id', 'cotisants.id')
+      .where('cotisants.actif', true)
+      .sum('cotisants.montant_journalier as s');
+    const caAttendu = parseFloat(attenduActifs) || 0;
+    const caDejaPaye = parseFloat(cotisantsPayes[0]?.s) || 0;
+    const caNonCollecteJour = Math.max(0, caAttendu - caDejaPaye);
+
+    // CA total collecté (toutes périodes, global)
+    const [{ s: caTotal }] = await db('paiements').where({ statut: 'paye' }).sum('montant as s');
+
+    // CA sur la période sélectionnée (si fournie)
+    let ca_periode = null;
+    let nombre_paiements_periode = null;
+    if (debut && fin) {
+      const [row] = await db('paiements')
+        .whereBetween('date', [debut, fin])
+        .where('statut', 'paye')
+        .count('id as n').sum('montant as s');
+      ca_periode = parseFloat(row.s) || 0;
+      nombre_paiements_periode = parseInt(row.n, 10) || 0;
+    }
+
     res.json({
       date: dateJour,
       total_cotisants: parseInt(totalActifs.count),
       payes: parseInt(payes.count),
       non_payes: nonPayes,
       montants_par_mode: montants,
+      ca_collecte_jour: parseFloat(caJour) || 0,
+      ca_non_collecte_jour: caNonCollecteJour,
+      ca_total: parseFloat(caTotal) || 0,
+      periode: debut && fin ? { debut, fin } : null,
+      ca_periode,
+      nombre_paiements_periode,
     });
   } catch (err) { next(err); }
 };

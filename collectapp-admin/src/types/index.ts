@@ -70,4 +70,10 @@ export interface DashboardData {
   payes: number;
   non_payes: number;
   montants_par_mode: { mode: string; total: string }[];
+  ca_collecte_jour: number;
+  ca_non_collecte_jour: number;
+  ca_total: number;
+  periode: { debut: string; fin: string } | null;
+  ca_periode: number | null;
+  nombre_paiements_periode: number | null;
 }

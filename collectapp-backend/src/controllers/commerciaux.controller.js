@@ -12,19 +12,58 @@ exports.list = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
+const todayCI = () =>
+  new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Abidjan' }).format(new Date());
+
 exports.getOne = async (req, res, next) => {
   try {
     const commercial = await db('utilisateurs')
       .where({ id: req.params.id, role: 'COMMERCIAL' })
-      .select('id', 'nom', 'identifiant', 'actif')
+      .select('id', 'nom', 'identifiant', 'actif', 'derniere_connexion')
       .first();
     if (!commercial) return res.status(404).json({ message: 'Commercial introuvable.' });
 
     const cotisants = await db('cotisants')
       .where({ commercial_id: commercial.id, actif: true })
-      .select('id', 'nom', 'telephone', 'montant_journalier');
+      .select('id', 'nom', 'telephone', 'montant_journalier')
+      .orderBy('nom');
 
-    res.json({ ...commercial, cotisants });
+    // Paiements du jour de ce commercial
+    const paiementsJour = await db('paiements')
+      .where({ commercial_id: commercial.id, date: todayCI(), statut: 'paye' })
+      .select('cotisant_id', 'montant', 'mode', 'horodatage');
+    const payeMap = new Map(paiementsJour.map((p) => [p.cotisant_id, p]));
+
+    // CA collecté aujourd'hui / CA non collecté (cotisants non payés)
+    let ca_collecte = 0;
+    let ca_non_collecte = 0;
+    const cotisantsEnrichis = cotisants.map((c) => {
+      const p = payeMap.get(c.id);
+      if (p) ca_collecte += Number(p.montant);
+      else ca_non_collecte += Number(c.montant_journalier);
+      return {
+        ...c,
+        paye_aujourd_hui: !!p,
+        mode_paiement: p ? p.mode : null,
+        heure_paiement: p ? p.horodatage : null,
+      };
+    });
+
+    // CA total collecté (toutes dates)
+    const [{ total }] = await db('paiements')
+      .where({ commercial_id: commercial.id, statut: 'paye' })
+      .sum('montant as total');
+
+    res.json({
+      ...commercial,
+      cotisants: cotisantsEnrichis,
+      nombre_cotisants: cotisants.length,
+      nombre_payes: paiementsJour.length,
+      nombre_impayes: cotisants.length - paiementsJour.length,
+      ca_collecte,
+      ca_non_collecte,
+      ca_total_collecte: Number(total) || 0,
+    });
   } catch (err) { next(err); }
 };
 

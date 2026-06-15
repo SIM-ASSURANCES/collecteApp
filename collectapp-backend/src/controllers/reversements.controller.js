@@ -213,6 +213,15 @@ exports.todayReversement = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
+exports.supprimer = async (req, res, next) => {
+  try {
+    const n = await db('reversements').where({ id: req.params.id }).del();
+    if (!n) return res.status(404).json({ message: 'Reversement introuvable.' });
+    logger.info(`Reversement #${req.params.id} supprimé par admin #${req.user.id}`);
+    res.json({ message: 'Reversement supprimé.' });
+  } catch (err) { next(err); }
+};
+
 exports.rejeter = async (req, res, next) => {
   try {
     const [r] = await db('reversements')

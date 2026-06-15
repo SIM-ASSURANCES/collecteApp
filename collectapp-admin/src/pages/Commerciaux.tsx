@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Edit2, UserX, UserCheck, Trash2, Users, ArrowRightLeft } from 'lucide-react';
+import { Plus, Edit2, UserX, UserCheck, Trash2, Users, ArrowRightLeft, Eye, CheckCircle2, XCircle } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../api/axios';
 import TopBar from '../components/layout/TopBar';
@@ -45,9 +45,19 @@ function CommercialForm({ initial, onSave, onClose }: {
   );
 }
 
+interface CommercialDetail extends Commercial {
+  nombre_cotisants: number;
+  nombre_payes: number;
+  nombre_impayes: number;
+  ca_collecte: number;
+  ca_non_collecte: number;
+  ca_total_collecte: number;
+  cotisants: (Cotisant & { paye_aujourd_hui?: boolean; mode_paiement?: string | null; heure_paiement?: string | null })[];
+}
+
 export default function Commerciaux() {
   const qc = useQueryClient();
-  const [modal, setModal] = useState<null | 'create' | 'edit' | 'portefeuille'>(null);
+  const [modal, setModal] = useState<null | 'create' | 'edit' | 'portefeuille' | 'details'>(null);
   const [selected, setSelected] = useState<Commercial | null>(null);
   const [reassignIds, setReassignIds] = useState<number[]>([]);
   const [targetCommercial, setTargetCommercial] = useState('');
@@ -57,10 +67,10 @@ export default function Commerciaux() {
     queryFn: () => api.get('/commerciaux').then(r => r.data),
   });
 
-  const { data: detail } = useQuery<Commercial>({
-    queryKey: ['commercial-detail', selected?.id],
+  const { data: detail } = useQuery<CommercialDetail>({
+    queryKey: ['commercial-detail', selected?.id, modal],
     queryFn: () => api.get(`/commerciaux/${selected!.id}`).then(r => r.data),
-    enabled: modal === 'portefeuille' && !!selected,
+    enabled: (modal === 'portefeuille' || modal === 'details') && !!selected,
   });
 
   const createMut = useMutation({
@@ -141,6 +151,12 @@ export default function Commerciaux() {
                   <span className="text-xs text-gray-500">Portefeuille cotisants</span>
                 </div>
 
+                <button onClick={() => { setSelected(c); setModal('details'); }}
+                        className="w-full mb-2 py-1.5 rounded-lg text-xs font-semibold text-white transition"
+                        style={{ background: '#004B9C' }}>
+                  <Eye size={13} className="inline mr-1" />Voir les détails
+                </button>
+
                 <div className="flex gap-2">
                   <button onClick={() => { setSelected(c); setModal('edit'); }}
                           className="flex-1 py-1.5 rounded-lg text-xs font-semibold border transition hover:bg-blue-50"
@@ -182,6 +198,57 @@ export default function Commerciaux() {
 
       <Modal isOpen={modal === 'edit'} onClose={() => setModal(null)} title="Modifier le commercial">
         {selected && <CommercialForm initial={selected} onSave={d => editMut.mutate(d)} onClose={() => setModal(null)} />}
+      </Modal>
+
+      <Modal isOpen={modal === 'details'} onClose={() => setModal(null)} title={`Détails — ${selected?.nom}`} size="lg">
+        <div className="space-y-4">
+          {/* Cartes CA */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div className="rounded-xl p-3 text-center" style={{ background: '#EBF3FC' }}>
+              <p className="text-lg font-bold" style={{ color: '#004B9C' }}>{detail?.nombre_cotisants ?? 0}</p>
+              <p className="text-xs text-gray-500">Cotisants</p>
+            </div>
+            <div className="rounded-xl p-3 text-center" style={{ background: '#D1FAE5' }}>
+              <p className="text-lg font-bold" style={{ color: '#059669' }}>{(detail?.ca_collecte ?? 0).toLocaleString()}</p>
+              <p className="text-xs text-gray-500">CA collecté (jour)</p>
+            </div>
+            <div className="rounded-xl p-3 text-center" style={{ background: '#FEE2E2' }}>
+              <p className="text-lg font-bold" style={{ color: '#DC2626' }}>{(detail?.ca_non_collecte ?? 0).toLocaleString()}</p>
+              <p className="text-xs text-gray-500">CA non collecté (jour)</p>
+            </div>
+            <div className="rounded-xl p-3 text-center" style={{ background: '#F4F6FA' }}>
+              <p className="text-lg font-bold" style={{ color: '#1A2B4A' }}>{(detail?.ca_total_collecte ?? 0).toLocaleString()}</p>
+              <p className="text-xs text-gray-500">CA total collecté</p>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between text-sm">
+            <span className="font-semibold text-gray-700">Cotisants assignés</span>
+            <span className="text-xs text-gray-500">
+              {detail?.nombre_payes ?? 0} payé(s) · {detail?.nombre_impayes ?? 0} impayé(s) aujourd'hui
+            </span>
+          </div>
+
+          <div className="max-h-72 overflow-y-auto border border-gray-100 rounded-xl divide-y">
+            {(detail?.cotisants ?? []).map((cot) => (
+              <div key={cot.id} className="flex items-center gap-3 px-4 py-2.5">
+                {cot.paye_aujourd_hui
+                  ? <CheckCircle2 size={16} style={{ color: '#059669' }} />
+                  : <XCircle size={16} style={{ color: '#DC2626' }} />}
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium truncate">{cot.nom}</p>
+                  <p className="text-xs text-gray-400 font-mono">{cot.telephone}</p>
+                </div>
+                <span className="text-sm font-semibold" style={{ color: '#004B9C' }}>
+                  {Number(cot.montant_journalier).toLocaleString()} F
+                </span>
+              </div>
+            ))}
+            {(detail?.cotisants ?? []).length === 0 && (
+              <p className="text-center text-gray-400 py-6 text-sm">Aucun cotisant assigné</p>
+            )}
+          </div>
+        </div>
       </Modal>
 
       <Modal isOpen={modal === 'portefeuille'} onClose={() => { setModal(null); setReassignIds([]); }} title={`Portefeuille — ${selected?.nom}`} size="lg">

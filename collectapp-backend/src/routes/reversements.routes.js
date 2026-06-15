@@ -46,4 +46,7 @@ router.patch(
   ctrl.rejeter
 );
 
+// Admin supprime un reversement
+router.delete('/:id', authorize('ADMIN'), param('id').isInt(), ctrl.supprimer);
+
 module.exports = router;

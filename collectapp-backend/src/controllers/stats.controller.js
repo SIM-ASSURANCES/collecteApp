@@ -64,22 +64,25 @@ exports.classementCommerciaux = async (req, res, next) => {
 
 exports.retardataires = async (req, res, next) => {
   try {
-    const { jours = 3 } = req.query;
+    // « En retard de N jours » = aucun paiement sur les N derniers jours (aujourd'hui inclus).
+    // N=1 → pas payé aujourd'hui.
+    const n = Math.max(1, parseInt(req.query.jours, 10) || 1);
     const dateRef = new Date();
-    dateRef.setDate(dateRef.getDate() - parseInt(jours));
+    dateRef.setDate(dateRef.getDate() - (n - 1));
+    const refStr = dateRef.toISOString().slice(0, 10);
 
     const retardataires = await db('cotisants')
-      .where({ actif: true })
-      .whereNotIn('id', function () {
+      .where('cotisants.actif', true)
+      .whereNotIn('cotisants.id', function () {
         this.select('cotisant_id')
           .from('paiements')
-          .where('date', '>=', dateRef.toISOString().slice(0, 10))
+          .where('date', '>=', refStr)
           .where('statut', '!=', 'annule');
       })
       .join('utilisateurs', 'cotisants.commercial_id', 'utilisateurs.id')
       .select('cotisants.*', 'utilisateurs.nom as commercial_nom');
 
-    res.json({ jours: parseInt(jours), count: retardataires.length, retardataires });
+    res.json({ jours: n, count: retardataires.length, retardataires });
   } catch (err) { next(err); }
 };
 

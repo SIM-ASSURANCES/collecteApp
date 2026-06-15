@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { CheckCircle2, XCircle, AlertTriangle, Filter, RefreshCw } from 'lucide-react';
+import { CheckCircle2, XCircle, AlertTriangle, Filter, RefreshCw, Trash2, ListChecks } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../api/axios';
 import TopBar from '../components/layout/TopBar';
@@ -15,7 +15,23 @@ export default function Reversements() {
   const [statutFilter, setStatutFilter] = useState('');
   const [selected, setSelected] = useState<Reversement | null>(null);
   const [motif, setMotif] = useState('');
-  const [modal, setModal] = useState<null | 'rejeter'>(null);
+  const [modal, setModal] = useState<null | 'rejeter' | 'tous'>(null);
+
+  const { data: tousReversements = [], isLoading: tousLoading } = useQuery<Reversement[]>({
+    queryKey: ['reversements-tous'],
+    queryFn: () => api.get('/reversements').then(r => r.data),
+    enabled: modal === 'tous',
+  });
+
+  const supprimerMut = useMutation({
+    mutationFn: (id: number) => api.delete(`/reversements/${id}`),
+    onSuccess: () => {
+      toast.success('Reversement supprimé.');
+      qc.invalidateQueries({ queryKey: ['reversements'] });
+      qc.invalidateQueries({ queryKey: ['reversements-tous'] });
+    },
+    onError: (e: any) => toast.error(e?.response?.data?.message ?? 'Suppression impossible'),
+  });
 
   const { data: reversements = [], isLoading } = useQuery<Reversement[]>({
     queryKey: ['reversements', dateFilter, statutFilter],
@@ -94,6 +110,10 @@ export default function Reversements() {
             <option value="valide">Validé</option>
             <option value="rejete">Rejeté</option>
           </select>
+          <button onClick={() => setModal('tous')}
+                  className="sim-btn-primary flex items-center gap-2 ml-auto">
+            <ListChecks size={16} /> Tous les reversements
+          </button>
         </div>
 
         {/* Tableau */}
@@ -173,6 +193,45 @@ export default function Reversements() {
           </table>
         </div>
       </div>
+
+      <Modal isOpen={modal === 'tous'} onClose={() => setModal(null)} title="Tous les reversements" size="lg">
+        <div className="overflow-x-auto max-h-[70vh]">
+          <table className="sim-table w-full text-sm">
+            <thead><tr>
+              <th>Date</th><th>Commercial</th><th>Déclaré</th>
+              <th>Paiement</th><th>Statut</th><th></th>
+            </tr></thead>
+            <tbody>
+              {tousLoading ? (
+                <tr><td colSpan={6} className="text-center py-8 text-gray-400">Chargement…</td></tr>
+              ) : tousReversements.length === 0 ? (
+                <tr><td colSpan={6} className="text-center py-8 text-gray-400">Aucun reversement</td></tr>
+              ) : tousReversements.map(r => (
+                <tr key={r.id}>
+                  <td>{new Date(r.date).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: '2-digit' })}</td>
+                  <td className="font-medium">{r.commercial_nom ?? `#${r.commercial_id}`}</td>
+                  <td className="font-semibold" style={{ color: '#004B9C' }}>{Number(r.montant_declare).toLocaleString()} F</td>
+                  <td><WaveStatusBadge statut={r.wave_payment_status} /></td>
+                  <td>
+                    <span className={
+                      r.statut === 'valide' ? 'sim-badge-paye' :
+                      r.statut === 'rejete' ? 'sim-badge-impaye' : 'sim-badge-attente'
+                    }>
+                      {r.statut === 'en_attente' ? 'En attente' : r.statut === 'valide' ? 'Validé' : 'Rejeté'}
+                    </span>
+                  </td>
+                  <td>
+                    <button onClick={() => { if (confirm('Supprimer ce reversement ? Action irréversible.')) supprimerMut.mutate(r.id); }}
+                            title="Supprimer" className="p-1.5 rounded-lg hover:bg-red-50 transition text-red-600">
+                      <Trash2 size={15} />
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </Modal>
 
       <Modal isOpen={modal === 'rejeter'} onClose={() => setModal(null)} title="Rejeter le reversement" size="sm">
         <div className="space-y-3">

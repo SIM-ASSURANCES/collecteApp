@@ -29,21 +29,31 @@ const COLORS = ['#004B9C', '#51AEE2', '#7EC8E3', '#E86B1F'];
 
 type PeriodeKey = 'jour' | 'semaine' | 'mois' | 'annee' | 'perso';
 
-// Calcule la plage [debut, fin] (format YYYY-MM-DD) pour une période
-function calcPeriode(key: PeriodeKey, anneeSel: number): { debut: string; fin: string } | null {
-  const fmt = (d: Date) => d.toISOString().slice(0, 10);
+const fmt = (d: Date) => d.toISOString().slice(0, 10);
+const todayStr = () => fmt(new Date());
+
+function calcPeriode(
+  key: PeriodeKey,
+  anneeSel: number,
+  dateDebut: string,
+  dateFin: string,
+): { debut: string; fin: string } | null {
   const now = new Date();
-  if (key === 'jour') return null; // pas de filtre période → vue du jour
+  if (key === 'jour') return null;
   if (key === 'semaine') {
-    const d = new Date(now); const day = (d.getDay() + 6) % 7; // lundi = 0
+    const d = new Date(now); const day = (d.getDay() + 6) % 7;
     d.setDate(d.getDate() - day);
     return { debut: fmt(d), fin: fmt(now) };
   }
   if (key === 'mois') {
     return { debut: fmt(new Date(now.getFullYear(), now.getMonth(), 1)), fin: fmt(now) };
   }
-  if (key === 'annee' || key === 'perso') {
+  if (key === 'annee') {
     return { debut: `${anneeSel}-01-01`, fin: `${anneeSel}-12-31` };
+  }
+  if (key === 'perso') {
+    if (!dateDebut || !dateFin) return null;
+    return { debut: dateDebut, fin: dateFin };
   }
   return null;
 }
@@ -53,7 +63,15 @@ export default function Dashboard() {
   const anneeCourante = new Date().getFullYear();
   const [annee, setAnnee] = useState(anneeCourante);
 
-  const plage = useMemo(() => calcPeriode(periode, annee), [periode, annee]);
+  const [dateDebut, setDateDebut] = useState(() => {
+    const d = new Date(); d.setDate(d.getDate() - 6); return fmt(d);
+  });
+  const [dateFin, setDateFin] = useState(todayStr);
+
+  const plage = useMemo(
+    () => calcPeriode(periode, annee, dateDebut, dateFin),
+    [periode, annee, dateDebut, dateFin],
+  );
   const periodeQs = plage ? `?debut=${plage.debut}&fin=${plage.fin}` : '';
 
   const { data, refetch } = useQuery<DashboardData>({
@@ -70,7 +88,7 @@ export default function Dashboard() {
 
   const { data: classement } = useQuery({
     queryKey: ['classement'],
-    queryFn: () => api.get('/stats/commerciaux').then(r => r.data),
+    queryFn: () => api.get('/stats/collecteurs').then(r => r.data),
     refetchInterval: 120_000,
   });
 
@@ -110,21 +128,49 @@ export default function Dashboard() {
             <span className="text-sm font-medium" style={{ color: '#004B9C' }}>Période :</span>
           </div>
           <div className="flex flex-wrap gap-2">
-            {([['jour', "Aujourd'hui"], ['semaine', 'Cette semaine'], ['mois', 'Ce mois'], ['annee', 'Année']] as [PeriodeKey, string][]).map(([k, label]) => (
+            {([
+              ['jour', "Aujourd'hui"],
+              ['semaine', 'Cette semaine'],
+              ['mois', 'Ce mois'],
+              ['annee', 'Année'],
+              ['perso', 'Personnalisé'],
+            ] as [PeriodeKey, string][]).map(([k, label]) => (
               <button key={k} onClick={() => setPeriode(k)}
                       className="px-3 py-1.5 rounded-lg text-sm font-semibold transition"
-                      style={periode === k ? { background: '#004B9C', color: 'white' } : { background: '#EBF3FC', color: '#004B9C' }}>
+                      style={periode === k
+                        ? { background: '#004B9C', color: 'white' }
+                        : { background: '#EBF3FC', color: '#004B9C' }}>
                 {label}
               </button>
             ))}
           </div>
-          {(periode === 'annee') && (
+
+          {/* Sélecteur d'année */}
+          {periode === 'annee' && (
             <select className="sim-input w-auto ml-1" value={annee} onChange={e => setAnnee(parseInt(e.target.value))}>
               {Array.from({ length: 5 }, (_, i) => anneeCourante - i).map(y => (
                 <option key={y} value={y}>{y}</option>
               ))}
             </select>
           )}
+
+          {/* Plage personnalisée Du / au */}
+          {periode === 'perso' && (
+            <div className="flex items-center gap-2 text-sm text-gray-600 ml-1">
+              <span className="font-medium">Du</span>
+              <input type="date" className="sim-input w-auto"
+                     value={dateDebut}
+                     max={dateFin}
+                     onChange={e => setDateDebut(e.target.value)} />
+              <span className="font-medium">au</span>
+              <input type="date" className="sim-input w-auto"
+                     value={dateFin}
+                     min={dateDebut}
+                     max={todayStr()}
+                     onChange={e => setDateFin(e.target.value)} />
+            </div>
+          )}
+
           {plage && data?.ca_periode != null && (
             <div className="ml-auto text-right">
               <p className="text-xs text-gray-500">CA collecté sur la période</p>
@@ -169,15 +215,14 @@ export default function Dashboard() {
 
         {/* Stat Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <StatCard icon={Users}        label="Cotisants actifs"  value={data?.total_cotisants ?? '…'} color="#004B9C" bg="#EBF3FC" />
-          <StatCard icon={CheckCircle2} label="Ont payé"          value={data?.payes ?? '…'}          sub="aujourd'hui" color="#059669" bg="#D1FAE5" />
-          <StatCard icon={XCircle}      label="N'ont pas payé"    value={data?.non_payes ?? '…'}      sub="à relancer"  color="#DC2626" bg="#FEE2E2" />
-          <StatCard icon={TrendingUp}   label="Total collecté"    value={`${totalCollecte.toLocaleString()} F`} sub="CFA aujourd'hui" color="#D97706" bg="#FEF3C7" />
+          <StatCard icon={Users}        label="Souscripteurs actifs" value={data?.total_cotisants ?? '…'} color="#004B9C" bg="#EBF3FC" />
+          <StatCard icon={CheckCircle2} label="Ont payé"             value={data?.payes ?? '…'}          sub="aujourd'hui" color="#059669" bg="#D1FAE5" />
+          <StatCard icon={XCircle}      label="N'ont pas payé"       value={data?.non_payes ?? '…'}      sub="à relancer"  color="#DC2626" bg="#FEE2E2" />
+          <StatCard icon={TrendingUp}   label="Total collecté"       value={`${totalCollecte.toLocaleString()} F`} sub="CFA aujourd'hui" color="#D97706" bg="#FEF3C7" />
         </div>
 
         {/* Ligne 2 : Mode de paiement + Classement */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Pie chart modes */}
           <div className="sim-card p-5">
             <p className="sim-section-title mb-4">Répartition par mode</p>
             {pieData.length > 0 ? (
@@ -197,9 +242,8 @@ export default function Dashboard() {
             )}
           </div>
 
-          {/* Bar chart classement commerciaux */}
           <div className="sim-card p-5">
-            <p className="sim-section-title mb-4">Top commerciaux du jour</p>
+            <p className="sim-section-title mb-4">Top collecteurs du jour</p>
             {barData.length > 0 ? (
               <ResponsiveContainer width="100%" height={220}>
                 <BarChart data={barData} barSize={28}>

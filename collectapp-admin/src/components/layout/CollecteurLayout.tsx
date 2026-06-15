@@ -9,13 +9,13 @@ import { useQueryClient } from '@tanstack/react-query';
 import api from '../../api/axios';
 
 const navLinks = [
-  { to: '/commercial',             icon: LayoutList, label: 'Ma liste'    },
-  { to: '/commercial/wave',        icon: Smartphone, label: 'Wave'        },
-  { to: '/commercial/manuel',      icon: Banknote,   label: 'Manuel'      },
-  { to: '/commercial/reversement', icon: Wallet2,    label: 'Reversement' },
+  { to: '/collecteur',             icon: LayoutList, label: 'Ma liste'    },
+  { to: '/collecteur/wave',        icon: Smartphone, label: 'Wave'        },
+  { to: '/collecteur/manuel',      icon: Banknote,   label: 'Manuel'      },
+  { to: '/collecteur/reversement', icon: Wallet2,    label: 'Reversement' },
 ];
 
-export default function CommercialLayout() {
+export default function CollecteurLayout() {
   const { isAuthenticated, user, logout } = useAuthStore();
   const navigate      = useNavigate();
   const queryClient   = useQueryClient();
@@ -47,7 +47,7 @@ export default function CommercialLayout() {
   }, [isOnline, queryClient]);
 
   if (!isAuthenticated()) return <Navigate to="/login" replace />;
-  if (user?.role !== 'COMMERCIAL') return <Navigate to="/" replace />;
+  if (user?.role !== 'COLLECTEUR') return <Navigate to="/" replace />;
 
   const handleLogout = async () => {
     try { await api.post('/auth/logout'); } catch { /* silencieux */ }
@@ -87,10 +87,10 @@ export default function CommercialLayout() {
         </div>
       </header>
 
-      {/* Commercial info bar */}
+      {/* Collecteur info bar */}
       <div className="px-4 py-2.5 flex items-center justify-between border-b border-gray-100 bg-white">
         <div>
-          <p className="text-xs text-gray-500">Commercial</p>
+          <p className="text-xs text-gray-500">Collecteur</p>
           <p className="font-semibold text-sm" style={{ color: '#004B9C' }}>{user?.nom}</p>
         </div>
         <div className="text-right">
@@ -111,7 +111,7 @@ export default function CommercialLayout() {
           <NavLink
             key={to}
             to={to}
-            end={to === '/commercial'}
+            end={to === '/collecteur'}
             className={({ isActive }) =>
               `flex-1 flex flex-col items-center justify-center py-2.5 text-xs font-medium transition-colors ${
                 isActive ? 'text-[#004B9C]' : 'text-gray-400'

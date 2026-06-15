@@ -1,11 +1,11 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
-import { Search, CheckCircle2, XCircle, Clock, ChevronRight, RefreshCw } from 'lucide-react';
+import { Search, CheckCircle2, XCircle, ChevronRight, RefreshCw } from 'lucide-react';
 import api from '../../api/axios';
-import type { Cotisant } from '../../types';
+import type { Souscripteur } from '../../types';
 
-interface CotisantAvecStatut extends Cotisant {
+interface SouscripteurAvecStatut extends Souscripteur {
   paye_aujourd_hui: boolean;
   heure_paiement?: string;
   mode_paiement?: string;
@@ -16,16 +16,15 @@ export default function MaListe() {
   const [search, setSearch] = useState('');
   const [filtre, setFiltre] = useState<'tous' | 'payes' | 'impayes'>('tous');
 
-  // Récupérer la liste des cotisants du commercial + paiements du jour
-  const { data: cotisants = [], isLoading, refetch, isFetching } = useQuery<CotisantAvecStatut[]>({
-    queryKey: ['ma-liste-commercial'],
+  const { data: cotisants = [], isLoading, refetch, isFetching } = useQuery<SouscripteurAvecStatut[]>({
+    queryKey: ['ma-liste-collecteur'],
     queryFn: async () => {
       const [listRes, paiementsRes] = await Promise.all([
-        api.get('/cotisants'),
+        api.get('/souscripteurs'),
         api.get('/paiements/today'),
       ]);
       const paiementsAujourdhui = paiementsRes.data as { cotisant_id: number; horodatage: string; mode: string }[];
-      return listRes.data.map((c: Cotisant) => {
+      return listRes.data.map((c: Souscripteur) => {
         const p = paiementsAujourdhui.find(p => p.cotisant_id === c.id);
         return {
           ...c,
@@ -123,12 +122,12 @@ export default function MaListe() {
       {isLoading ? (
         <div className="text-center py-10 text-gray-400 text-sm">Chargement de votre liste…</div>
       ) : filtered.length === 0 ? (
-        <div className="text-center py-10 text-gray-400 text-sm">Aucun cotisant trouvé</div>
+        <div className="text-center py-10 text-gray-400 text-sm">Aucun souscripteur trouvé</div>
       ) : (
         <div className="space-y-2">
           {filtered.map(c => (
             <button key={c.id}
-                    onClick={() => navigate('/commercial/paiement', { state: { cotisant: c } })}
+                    onClick={() => navigate('/collecteur/paiement', { state: { cotisant: c } })}
                     className="w-full bg-white rounded-xl p-4 flex items-center gap-3 text-left transition active:scale-95"
                     style={{ boxShadow: '0 1px 4px rgba(0,75,156,0.07)' }}>
               {/* Avatar */}

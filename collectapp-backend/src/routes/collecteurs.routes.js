@@ -1,6 +1,6 @@
-﻿const router = require('express').Router();
+const router = require('express').Router();
 const { body, param } = require('express-validator');
-const ctrl = require('../controllers/commerciaux.controller');
+const ctrl = require('../controllers/collecteurs.controller');
 const auth = require('../middlewares/auth');
 const authorize = require('../middlewares/authorize');
 
@@ -14,7 +14,7 @@ router.post(
   [
     body('nom').notEmpty(),
     body('identifiant').notEmpty(),
-    body('mot_de_passe').isLength({ min: 6 }).withMessage('Minimum 6 caractÃ¨res.'),
+    body('mot_de_passe').isLength({ min: 6 }).withMessage('Minimum 6 caractères.'),
   ],
   ctrl.create
 );

@@ -3,9 +3,9 @@ import { useQuery } from '@tanstack/react-query';
 import { AlertTriangle, Download, Phone, User, RefreshCw } from 'lucide-react';
 import api from '../api/axios';
 import TopBar from '../components/layout/TopBar';
-import type { Cotisant } from '../types';
+import type { Souscripteur } from '../types';
 
-interface Retardataire extends Cotisant { commercial_nom: string; }
+interface Retardataire extends Souscripteur { commercial_nom: string; }
 
 export default function Relances() {
   const [jours, setJours] = useState(3);
@@ -19,7 +19,7 @@ export default function Relances() {
 
   const handleExportCSV = () => {
     if (retardataires.length === 0) return;
-    const header = 'Nom,Telephone,Montant journalier,Commercial\n';
+    const header = 'Nom,Telephone,Montant journalier,Collecteur\n';
     const rows = retardataires.map(r =>
       `"${r.nom}",${r.telephone},${r.montant_journalier},"${r.commercial_nom ?? ''}"`
     ).join('\n');
@@ -31,7 +31,7 @@ export default function Relances() {
 
   return (
     <div className="flex-1 overflow-auto">
-      <TopBar title="Relances & Cotisants en retard" subtitle="Gestion des impayés" />
+      <TopBar title="Relances & Souscripteurs en retard" subtitle="Gestion des impayés" />
 
       <div className="p-6 space-y-5">
         {/* Alerte principale */}
@@ -40,7 +40,7 @@ export default function Relances() {
             <AlertTriangle size={20} style={{ color: '#D97706' }} />
             <div>
               <p className="font-semibold text-sm" style={{ color: '#92400E' }}>
-                {data!.count} cotisant(s) n'ont pas payé depuis {jours} jour(s) ou plus
+                {data!.count} souscripteur(s) n'ont pas payé depuis {jours} jour(s) ou plus
               </p>
               <p className="text-xs" style={{ color: '#B45309' }}>
                 Montant total non collecté : {retardataires.reduce((s, r) => s + Number(r.montant_journalier) * jours, 0).toLocaleString()} FCFA estimé
@@ -53,7 +53,7 @@ export default function Relances() {
         <div className="sim-card p-4 flex flex-wrap gap-3 items-center justify-between">
           <div className="flex items-center gap-3">
             <label className="text-sm font-medium" style={{ color: '#004B9C' }}>
-              Cotisants en retard depuis :
+              Souscripteurs en retard depuis :
             </label>
             <div className="flex gap-2">
               {[1, 3, 7, 14, 30].map(n => (
@@ -84,13 +84,13 @@ export default function Relances() {
           <div className="p-4 flex items-center gap-2 border-b border-gray-100" style={{ background: '#FEF3C7' }}>
             <AlertTriangle size={16} style={{ color: '#D97706' }} />
             <span className="text-sm font-semibold" style={{ color: '#92400E' }}>
-              {isLoading ? '…' : `${data?.count ?? 0} cotisant(s) en retard de ${jours} jour(s) ou plus`}
+              {isLoading ? '…' : `${data?.count ?? 0} souscripteur(s) en retard de ${jours} jour(s) ou plus`}
             </span>
           </div>
           <table className="sim-table w-full">
             <thead><tr>
-              <th>Cotisant</th><th>Téléphone</th>
-              <th>Cotisation/jour</th><th>Commercial</th>
+              <th>Souscripteur</th><th>Téléphone</th>
+              <th>Cotisation/jour</th><th>Collecteur</th>
               <th>Manque estimé ({jours}j)</th>
             </tr></thead>
             <tbody>

@@ -3,6 +3,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const db = require('../config/db');
 const logger = require('../config/logger');
+const logActivite = require('../utils/logActivite');
 
 const MAX_ATTEMPTS = 5;
 const LOCK_DURATION_MIN = 15;
@@ -53,6 +54,7 @@ exports.login = async (req, res, next) => {
     );
 
     logger.info(`Connexion réussie — utilisateur #${user.id} (${user.role})`);
+    logActivite({ utilisateur_id: user.id, action: 'LOGIN', details: { role: user.role }, ip: req.ip });
     res.json({ token, user: { id: user.id, nom: user.nom, role: user.role, permissions } });
   } catch (err) {
     next(err);

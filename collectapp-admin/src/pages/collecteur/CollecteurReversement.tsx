@@ -1,7 +1,7 @@
 /**
  * Reversement de fin de journée (espèces uniquement) + historique
- * Route : /commercial/reversement
- * Le commercial charge son compte Wave avec les espèces collectées,
+ * Route : /collecteur/reversement
+ * Le collecteur charge son compte Wave avec les espèces collectées,
  * saisit le montant + son numéro Wave, valide, puis consulte son historique.
  */
 import { useState } from 'react';
@@ -35,7 +35,7 @@ interface ReversementItem {
 type Etape = 'saisie' | 'confirmation' | 'soumis';
 type Onglet = 'nouveau' | 'historique';
 
-export default function CommercialReversement() {
+export default function CollecteurReversement() {
   const queryClient = useQueryClient();
   const [onglet, setOnglet] = useState<Onglet>('nouveau');
   const [etape, setEtape] = useState<Etape>('saisie');

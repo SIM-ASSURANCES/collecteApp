@@ -2,13 +2,14 @@ const { validationResult } = require('express-validator');
 const bcrypt = require('bcryptjs');
 const db = require('../config/db');
 const logger = require('../config/logger');
+const logActivite = require('../utils/logActivite');
 
 const PERMISSIONS_VALIDES = [
-  'dashboard', 'cotisants', 'commerciaux', 'reversements',
+  'dashboard', 'cotisants', 'collecteurs', 'reversements',
   'statistiques', 'relances', 'utilisateurs',
 ];
 
-// Les commerciaux sont gérés via /api/commerciaux (page dédiée)
+// Les collecteurs sont gérés via /api/collecteurs (page dédiée)
 const ROLES_VALIDES = ['ADMIN', 'SUPERVISEUR'];
 
 const champsPublics = [
@@ -60,12 +61,13 @@ exports.create = async (req, res, next) => {
         identifiant,
         mot_de_passe_hash: hash,
         role,
-        // ADMIN et COMMERCIAL : permissions implicites au rôle
+        // ADMIN et COLLECTEUR : permissions implicites au rôle
         permissions: JSON.stringify(role === 'SUPERVISEUR' ? nettoyerPermissions(permissions) : []),
       })
       .returning(champsPublics);
 
     logger.info(`Utilisateur #${utilisateur.id} créé (${role}) par admin #${req.user.id}`);
+    logActivite({ utilisateur_id: req.user.id, action: 'UTILISATEUR_CREE', entite: 'utilisateur', entite_id: utilisateur.id, details: { nom, role } });
     res.status(201).json(utilisateur);
   } catch (err) { next(err); }
 };
@@ -110,6 +112,7 @@ exports.update = async (req, res, next) => {
       .returning(champsPublics);
 
     logger.info(`Utilisateur #${id} modifié par admin #${req.user.id}`);
+    logActivite({ utilisateur_id: req.user.id, action: 'UTILISATEUR_MODIFIE', entite: 'utilisateur', entite_id: id });
     res.json(utilisateur);
   } catch (err) {
     if (err.code === '23505') {

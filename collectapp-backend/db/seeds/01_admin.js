@@ -11,10 +11,10 @@ exports.seed = async (knex) => {
       actif: true,
     },
     {
-      nom: 'Commercial Test',
-      identifiant: 'commercial1',
+      nom: 'Collecteur Test',
+      identifiant: 'collecteur1',
       mot_de_passe_hash: await bcrypt.hash('Test123!', 10),
-      role: 'COMMERCIAL',
+      role: 'COLLECTEUR',
       actif: true,
     },
   ]);

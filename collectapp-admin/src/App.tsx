@@ -3,25 +3,26 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Toaster } from 'react-hot-toast';
 // ── Layouts ──
 import AppLayout        from './components/layout/AppLayout';
-import CommercialLayout from './components/layout/CommercialLayout';
+import CollecteurLayout from './components/layout/CollecteurLayout';
 // ── Pages admin ──
 import Login        from './pages/Login';
 import Dashboard    from './pages/Dashboard';
-import Cotisants    from './pages/Cotisants';
-import Commerciaux  from './pages/Commerciaux';
+import Souscripteurs from './pages/Souscripteurs';
+import Collecteurs    from './pages/Collecteurs';
 import Reversements from './pages/Reversements';
 import Statistiques from './pages/Statistiques';
 import Relances     from './pages/Relances';
-import Utilisateurs from './pages/Utilisateurs';
+import Utilisateurs      from './pages/Utilisateurs';
+import JournalActivites  from './pages/JournalActivites';
 // ── Pages publiques (redirections Wave) ──
 import PaiementOk     from './pages/PaiementOk';
 import PaiementErreur from './pages/PaiementErreur';
-// ── Pages commercial ──
-import MaListe                from './pages/commercial/MaListe';
-import Paiement               from './pages/commercial/Paiement';
-import PaiementWave           from './pages/commercial/PaiementWave';
-import PaiementManuel         from './pages/commercial/PaiementManuel';
-import CommercialReversement  from './pages/commercial/CommercialReversement';
+// ── Pages collecteur ──
+import MaListe                from './pages/collecteur/MaListe';
+import Paiement               from './pages/collecteur/Paiement';
+import PaiementWave           from './pages/collecteur/PaiementWave';
+import PaiementManuel         from './pages/collecteur/PaiementManuel';
+import CollecteurReversement  from './pages/collecteur/CollecteurReversement';
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { staleTime: 30_000, retry: 1 } },
@@ -45,21 +46,22 @@ export default function App() {
           {/* ── Espace ADMIN ── */}
           <Route element={<AppLayout />}>
             <Route index                element={<Dashboard />}    />
-            <Route path="cotisants"     element={<Cotisants />}    />
-            <Route path="commerciaux"   element={<Commerciaux />}  />
+            <Route path="souscripteurs" element={<Souscripteurs />} />
+            <Route path="collecteurs"   element={<Collecteurs />}  />
             <Route path="reversements"  element={<Reversements />} />
             <Route path="statistiques"  element={<Statistiques />} />
             <Route path="relances"      element={<Relances />}     />
             <Route path="utilisateurs"  element={<Utilisateurs />} />
+            <Route path="journal"       element={<JournalActivites />} />
           </Route>
 
-          {/* ── Espace COMMERCIAL (mobile-first) ── */}
-          <Route path="/commercial" element={<CommercialLayout />}>
+          {/* ── Espace COLLECTEUR (mobile-first) ── */}
+          <Route path="/collecteur" element={<CollecteurLayout />}>
             <Route index                  element={<MaListe />}               />
             <Route path="paiement"        element={<Paiement />}              />
             <Route path="wave"            element={<PaiementWave />}          />
             <Route path="manuel"          element={<PaiementManuel />}        />
-            <Route path="reversement"     element={<CommercialReversement />} />
+            <Route path="reversement"     element={<CollecteurReversement />} />
           </Route>
         </Routes>
       </BrowserRouter>

@@ -1,4 +1,4 @@
-export type Role = 'ADMIN' | 'SUPERVISEUR' | 'COMMERCIAL';
+export type Role = 'ADMIN' | 'SUPERVISEUR' | 'COLLECTEUR';
 
 export interface User {
   id: number;
@@ -18,22 +18,25 @@ export interface UtilisateurAdmin {
   created_at: string;
 }
 
-export interface Cotisant {
+export type FrequenceCollecte = 'journalier' | 'hebdomadaire' | 'mensuel' | 'trimestriel' | 'semestriel' | 'annuel';
+
+export interface Souscripteur {
   id: number;
   nom: string;
   telephone: string;
   montant_journalier: number;
+  frequence_collecte: FrequenceCollecte;
   date_inscription: string;
   commercial_id: number;
   actif: boolean;
 }
 
-export interface Commercial {
+export interface Collecteur {
   id: number;
   nom: string;
   identifiant: string;
   actif: boolean;
-  cotisants?: Cotisant[];
+  cotisants?: Souscripteur[];
 }
 
 export interface Paiement {
@@ -76,4 +79,18 @@ export interface DashboardData {
   periode: { debut: string; fin: string } | null;
   ca_periode: number | null;
   nombre_paiements_periode: number | null;
+}
+
+export interface JournalActivite {
+  id: number;
+  utilisateur_id: number | null;
+  utilisateur_nom: string | null;
+  utilisateur_role: string | null;
+  action: string;
+  action_label: string;
+  entite: string | null;
+  entite_id: number | null;
+  details: Record<string, unknown> | null;
+  ip: string | null;
+  created_at: string;
 }

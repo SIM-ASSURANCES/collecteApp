@@ -19,8 +19,8 @@ export default function Login() {
       const { data } = await api.post('/auth/login', { identifiant, mot_de_passe: motDePasse });
       login(data.token, data.user);
       // Redirection selon le rôle et les permissions
-      if (data.user.role === 'COMMERCIAL') {
-        navigate('/commercial');
+      if (data.user.role === 'COLLECTEUR') {
+        navigate('/collecteur');
       } else {
         navigate(firstAllowedPath(data.user));
       }

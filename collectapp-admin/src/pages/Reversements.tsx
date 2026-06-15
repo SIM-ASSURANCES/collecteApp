@@ -120,7 +120,7 @@ export default function Reversements() {
         <div className="sim-card overflow-hidden">
           <table className="sim-table w-full">
             <thead><tr>
-              <th>Commercial</th><th>Déclaré</th><th>Attendu</th>
+              <th>Collecteur</th><th>Déclaré</th><th>Attendu</th>
               <th>Écart</th><th>Paiement Wave</th><th>Statut</th><th>Actions</th>
             </tr></thead>
             <tbody>
@@ -198,7 +198,7 @@ export default function Reversements() {
         <div className="overflow-x-auto max-h-[70vh]">
           <table className="sim-table w-full text-sm">
             <thead><tr>
-              <th>Date</th><th>Commercial</th><th>Déclaré</th>
+              <th>Date</th><th>Collecteur</th><th>Déclaré</th>
               <th>Paiement</th><th>Statut</th><th></th>
             </tr></thead>
             <tbody>

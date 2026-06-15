@@ -5,10 +5,10 @@ import toast from 'react-hot-toast';
 import api from '../api/axios';
 import TopBar from '../components/layout/TopBar';
 import Modal from '../components/ui/Modal';
-import type { Commercial, Cotisant } from '../types';
+import type { Collecteur, Souscripteur } from '../types';
 
-function CommercialForm({ initial, onSave, onClose }: {
-  initial?: Partial<Commercial>;
+function CollecteurForm({ initial, onSave, onClose }: {
+  initial?: Partial<Collecteur>;
   onSave: (data: Record<string, string>) => void;
   onClose: () => void;
 }) {
@@ -35,7 +35,7 @@ function CommercialForm({ initial, onSave, onClose }: {
       </div>
       <div className="flex gap-3 pt-2">
         <button type="submit" className="sim-btn-primary flex-1">
-          {initial?.id ? 'Enregistrer' : 'Créer le commercial'}
+          {initial?.id ? 'Enregistrer' : 'Créer le collecteur'}
         </button>
         <button type="button" onClick={onClose} className="flex-1 py-2 rounded-lg border border-gray-200 text-sm font-medium text-gray-600 hover:bg-gray-50 transition">
           Annuler
@@ -45,92 +45,92 @@ function CommercialForm({ initial, onSave, onClose }: {
   );
 }
 
-interface CommercialDetail extends Commercial {
+interface CollecteurDetail extends Collecteur {
   nombre_cotisants: number;
   nombre_payes: number;
   nombre_impayes: number;
   ca_collecte: number;
   ca_non_collecte: number;
   ca_total_collecte: number;
-  cotisants: (Cotisant & { paye_aujourd_hui?: boolean; mode_paiement?: string | null; heure_paiement?: string | null })[];
+  cotisants: (Souscripteur & { paye_aujourd_hui?: boolean; mode_paiement?: string | null; heure_paiement?: string | null })[];
 }
 
-export default function Commerciaux() {
+export default function Collecteurs() {
   const qc = useQueryClient();
   const [modal, setModal] = useState<null | 'create' | 'edit' | 'portefeuille' | 'details'>(null);
-  const [selected, setSelected] = useState<Commercial | null>(null);
+  const [selected, setSelected] = useState<Collecteur | null>(null);
   const [reassignIds, setReassignIds] = useState<number[]>([]);
-  const [targetCommercial, setTargetCommercial] = useState('');
+  const [targetCollecteur, setTargetCollecteur] = useState('');
 
-  const { data: commerciaux = [], isLoading } = useQuery<Commercial[]>({
-    queryKey: ['commerciaux'],
-    queryFn: () => api.get('/commerciaux').then(r => r.data),
+  const { data: collecteurs = [], isLoading } = useQuery<Collecteur[]>({
+    queryKey: ['collecteurs'],
+    queryFn: () => api.get('/collecteurs').then(r => r.data),
   });
 
-  const { data: detail } = useQuery<CommercialDetail>({
-    queryKey: ['commercial-detail', selected?.id, modal],
-    queryFn: () => api.get(`/commerciaux/${selected!.id}`).then(r => r.data),
+  const { data: detail } = useQuery<CollecteurDetail>({
+    queryKey: ['collecteur-detail', selected?.id, modal],
+    queryFn: () => api.get(`/collecteurs/${selected!.id}`).then(r => r.data),
     enabled: (modal === 'portefeuille' || modal === 'details') && !!selected,
   });
 
   const createMut = useMutation({
-    mutationFn: (d: Record<string, string>) => api.post('/commerciaux', d),
-    onSuccess: () => { toast.success('Commercial créé !'); qc.invalidateQueries({ queryKey: ['commerciaux'] }); setModal(null); },
+    mutationFn: (d: Record<string, string>) => api.post('/collecteurs', d),
+    onSuccess: () => { toast.success('Collecteur créé !'); qc.invalidateQueries({ queryKey: ['collecteurs'] }); setModal(null); },
     onError: (e: unknown) => toast.error((e as { response?: { data?: { message?: string } } })?.response?.data?.message ?? 'Erreur'),
   });
 
   const editMut = useMutation({
-    mutationFn: (d: Record<string, string>) => api.put(`/commerciaux/${selected!.id}`, d),
-    onSuccess: () => { toast.success('Commercial mis à jour !'); qc.invalidateQueries({ queryKey: ['commerciaux'] }); setModal(null); },
+    mutationFn: (d: Record<string, string>) => api.put(`/collecteurs/${selected!.id}`, d),
+    onSuccess: () => { toast.success('Collecteur mis à jour !'); qc.invalidateQueries({ queryKey: ['collecteurs'] }); setModal(null); },
     onError: () => toast.error('Erreur lors de la modification'),
   });
 
   const desactiverMut = useMutation({
-    mutationFn: (id: number) => api.patch(`/commerciaux/${id}/desactiver`),
-    onSuccess: () => { toast.success('Commercial désactivé.'); qc.invalidateQueries({ queryKey: ['commerciaux'] }); },
+    mutationFn: (id: number) => api.patch(`/collecteurs/${id}/desactiver`),
+    onSuccess: () => { toast.success('Collecteur désactivé.'); qc.invalidateQueries({ queryKey: ['collecteurs'] }); },
   });
 
   const activerMut = useMutation({
-    mutationFn: (id: number) => api.patch(`/commerciaux/${id}/activer`),
-    onSuccess: () => { toast.success('Commercial réactivé.'); qc.invalidateQueries({ queryKey: ['commerciaux'] }); },
+    mutationFn: (id: number) => api.patch(`/collecteurs/${id}/activer`),
+    onSuccess: () => { toast.success('Collecteur réactivé.'); qc.invalidateQueries({ queryKey: ['collecteurs'] }); },
   });
 
   const supprimerMut = useMutation({
-    mutationFn: (id: number) => api.delete(`/commerciaux/${id}`),
-    onSuccess: () => { toast.success('Commercial supprimé.'); qc.invalidateQueries({ queryKey: ['commerciaux'] }); },
+    mutationFn: (id: number) => api.delete(`/collecteurs/${id}`),
+    onSuccess: () => { toast.success('Collecteur supprimé.'); qc.invalidateQueries({ queryKey: ['collecteurs'] }); },
     onError: (e: unknown) => toast.error((e as { response?: { data?: { message?: string } } })?.response?.data?.message ?? 'Suppression impossible'),
   });
 
   const reassignMut = useMutation({
-    mutationFn: () => api.patch(`/commerciaux/${selected!.id}/reassigner`, {
+    mutationFn: () => api.patch(`/collecteurs/${selected!.id}/reassigner`, {
       cotisant_ids: reassignIds,
-      nouveau_commercial_id: parseInt(targetCommercial),
+      nouveau_commercial_id: parseInt(targetCollecteur),
     }),
     onSuccess: () => {
-      toast.success(`${reassignIds.length} cotisant(s) réassigné(s) !`);
-      qc.invalidateQueries({ queryKey: ['commerciaux'] });
-      setModal(null); setReassignIds([]); setTargetCommercial('');
+      toast.success(`${reassignIds.length} souscripteur(s) réassigné(s) !`);
+      qc.invalidateQueries({ queryKey: ['collecteurs'] });
+      setModal(null); setReassignIds([]); setTargetCollecteur('');
     },
     onError: () => toast.error('Erreur lors de la réassignation'),
   });
 
   return (
     <div className="flex-1 overflow-auto">
-      <TopBar title="Gestion des Commerciaux" subtitle={`${commerciaux.length} commercial(aux)`} />
+      <TopBar title="Gestion des Collecteurs" subtitle={`${collecteurs.length} collecteur(s)`} />
 
       <div className="p-6 space-y-5">
         <div className="flex justify-end">
           <button className="sim-btn-primary flex items-center gap-2" onClick={() => { setSelected(null); setModal('create'); }}>
-            <Plus size={16} /> Nouveau commercial
+            <Plus size={16} /> Nouveau collecteur
           </button>
         </div>
 
-        {/* Grille cards commerciaux */}
+        {/* Grille cards collecteurs */}
         {isLoading ? (
           <p className="text-center text-gray-400 py-10">Chargement…</p>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {commerciaux.map(c => (
+            {collecteurs.map(c => (
               <div key={c.id} className="sim-card p-5">
                 <div className="flex items-start justify-between mb-3">
                   <div className="flex items-center gap-3">
@@ -148,7 +148,7 @@ export default function Commerciaux() {
 
                 <div className="flex items-center gap-2 py-2 border-t border-gray-50 mb-3">
                   <Users size={14} style={{ color: '#51AEE2' }} />
-                  <span className="text-xs text-gray-500">Portefeuille cotisants</span>
+                  <span className="text-xs text-gray-500">Portefeuille souscripteurs</span>
                 </div>
 
                 <button onClick={() => { setSelected(c); setModal('details'); }}
@@ -192,12 +192,12 @@ export default function Commerciaux() {
         )}
       </div>
 
-      <Modal isOpen={modal === 'create'} onClose={() => setModal(null)} title="Nouveau commercial">
-        <CommercialForm onSave={d => createMut.mutate(d)} onClose={() => setModal(null)} />
+      <Modal isOpen={modal === 'create'} onClose={() => setModal(null)} title="Nouveau collecteur">
+        <CollecteurForm onSave={d => createMut.mutate(d)} onClose={() => setModal(null)} />
       </Modal>
 
-      <Modal isOpen={modal === 'edit'} onClose={() => setModal(null)} title="Modifier le commercial">
-        {selected && <CommercialForm initial={selected} onSave={d => editMut.mutate(d)} onClose={() => setModal(null)} />}
+      <Modal isOpen={modal === 'edit'} onClose={() => setModal(null)} title="Modifier le collecteur">
+        {selected && <CollecteurForm initial={selected} onSave={d => editMut.mutate(d)} onClose={() => setModal(null)} />}
       </Modal>
 
       <Modal isOpen={modal === 'details'} onClose={() => setModal(null)} title={`Détails — ${selected?.nom}`} size="lg">
@@ -206,7 +206,7 @@ export default function Commerciaux() {
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <div className="rounded-xl p-3 text-center" style={{ background: '#EBF3FC' }}>
               <p className="text-lg font-bold" style={{ color: '#004B9C' }}>{detail?.nombre_cotisants ?? 0}</p>
-              <p className="text-xs text-gray-500">Cotisants</p>
+              <p className="text-xs text-gray-500">Souscripteurs</p>
             </div>
             <div className="rounded-xl p-3 text-center" style={{ background: '#D1FAE5' }}>
               <p className="text-lg font-bold" style={{ color: '#059669' }}>{(detail?.ca_collecte ?? 0).toLocaleString()}</p>
@@ -223,7 +223,7 @@ export default function Commerciaux() {
           </div>
 
           <div className="flex items-center justify-between text-sm">
-            <span className="font-semibold text-gray-700">Cotisants assignés</span>
+            <span className="font-semibold text-gray-700">Souscripteurs assignés</span>
             <span className="text-xs text-gray-500">
               {detail?.nombre_payes ?? 0} payé(s) · {detail?.nombre_impayes ?? 0} impayé(s) aujourd'hui
             </span>
@@ -245,7 +245,7 @@ export default function Commerciaux() {
               </div>
             ))}
             {(detail?.cotisants ?? []).length === 0 && (
-              <p className="text-center text-gray-400 py-6 text-sm">Aucun cotisant assigné</p>
+              <p className="text-center text-gray-400 py-6 text-sm">Aucun souscripteur assigné</p>
             )}
           </div>
         </div>
@@ -253,9 +253,9 @@ export default function Commerciaux() {
 
       <Modal isOpen={modal === 'portefeuille'} onClose={() => { setModal(null); setReassignIds([]); }} title={`Portefeuille — ${selected?.nom}`} size="lg">
         <div className="space-y-4">
-          <p className="text-sm text-gray-600">Sélectionnez les cotisants à réassigner :</p>
+          <p className="text-sm text-gray-600">Sélectionnez les souscripteurs à réassigner :</p>
           <div className="max-h-64 overflow-y-auto border border-gray-100 rounded-xl divide-y">
-            {(detail?.cotisants ?? []).map((cot: Cotisant) => (
+            {(detail?.cotisants ?? []).map((cot: Souscripteur) => (
               <label key={cot.id} className="flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 cursor-pointer">
                 <input type="checkbox" className="rounded"
                        checked={reassignIds.includes(cot.id)}
@@ -267,22 +267,22 @@ export default function Commerciaux() {
               </label>
             ))}
             {(detail?.cotisants ?? []).length === 0 && (
-              <p className="text-center text-gray-400 py-6 text-sm">Aucun cotisant assigné</p>
+              <p className="text-center text-gray-400 py-6 text-sm">Aucun souscripteur assigné</p>
             )}
           </div>
           {reassignIds.length > 0 && (
             <div>
               <label className="sim-label">Réassigner vers *</label>
-              <select className="sim-input" value={targetCommercial} onChange={e => setTargetCommercial(e.target.value)}>
-                <option value="">-- Choisir un commercial --</option>
-                {commerciaux.filter(c => c.id !== selected?.id && c.actif).map(c => (
+              <select className="sim-input" value={targetCollecteur} onChange={e => setTargetCollecteur(e.target.value)}>
+                <option value="">-- Choisir un collecteur --</option>
+                {collecteurs.filter(c => c.id !== selected?.id && c.actif).map(c => (
                   <option key={c.id} value={c.id}>{c.nom}</option>
                 ))}
               </select>
             </div>
           )}
           <div className="flex gap-3 pt-1">
-            <button disabled={reassignIds.length === 0 || !targetCommercial}
+            <button disabled={reassignIds.length === 0 || !targetCollecteur}
                     onClick={() => reassignMut.mutate()}
                     className="sim-btn-secondary flex-1 disabled:opacity-40">
               Réassigner {reassignIds.length > 0 ? `(${reassignIds.length})` : ''}

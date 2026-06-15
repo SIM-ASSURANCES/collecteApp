@@ -21,7 +21,7 @@ export default function PaiementErreur() {
           <h1 className="text-2xl font-bold" style={{ color: '#004B9C' }}>Paiement non abouti</h1>
           <p className="text-sm text-gray-500 mt-2">
             Le paiement a été annulé ou n'a pas pu être traité.
-            Rapprochez-vous de votre commercial pour réessayer.
+            Rapprochez-vous de votre collecteur pour réessayer.
           </p>
         </div>
       </div>

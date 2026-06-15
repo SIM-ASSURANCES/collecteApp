@@ -5,12 +5,62 @@ const logger = require('../config/logger');
 const sseClients = require('../utils/sseClients');
 
 // Date du jour au fuseau de la Côte d'Ivoire (Africa/Abidjan, UTC+0).
-// Le statut « payé » est recalculé chaque jour : un paiement n'est « du jour »
-// que si sa date == aujourd'hui, donc tout repasse en impayé à minuit local.
 const today = () =>
   new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Abidjan' }).format(new Date());
 
-// Vérification anti-doublon
+// Début de la période courante selon la fréquence (Africa/Abidjan ≈ UTC+0)
+function debutPeriode(frequence, periodIndex = 0) {
+  const base = today(); // 'YYYY-MM-DD'
+  const d = new Date(base + 'T00:00:00Z');
+
+  switch (frequence) {
+    case 'hebdomadaire': {
+      const dow = d.getUTCDay(); // 0=dim … 6=sam
+      const offset = dow === 0 ? 6 : dow - 1; // jours depuis lundi
+      d.setUTCDate(d.getUTCDate() - offset + periodIndex * 7);
+      break;
+    }
+    case 'mensuel':
+      d.setUTCDate(1);
+      d.setUTCMonth(d.getUTCMonth() + periodIndex);
+      break;
+    case 'trimestriel': {
+      const firstQ = Math.floor(d.getUTCMonth() / 3) * 3;
+      d.setUTCDate(1);
+      d.setUTCMonth(firstQ + periodIndex * 3);
+      break;
+    }
+    case 'semestriel': {
+      const firstS = d.getUTCMonth() < 6 ? 0 : 6;
+      d.setUTCDate(1);
+      d.setUTCMonth(firstS + periodIndex * 6);
+      break;
+    }
+    case 'annuel':
+      d.setUTCDate(1);
+      d.setUTCMonth(0);
+      d.setUTCFullYear(d.getUTCFullYear() + periodIndex);
+      break;
+    default: // journalier
+      d.setUTCDate(d.getUTCDate() + periodIndex);
+  }
+
+  return d.toISOString().slice(0, 10);
+}
+
+// Anti-doublon respectant la fréquence : vérifie si un paiement existe dans la période en cours
+async function dejaPayePourPeriode(cotisant_id, frequence = 'journalier') {
+  const dateJour = today();
+  const periodeDebut = debutPeriode(frequence, 0);
+  const paiement = await db('paiements')
+    .where({ cotisant_id })
+    .whereBetween('date', [periodeDebut, dateJour])
+    .where('statut', '!=', 'annule')
+    .first();
+  return !!paiement;
+}
+
+// Conservé pour syncOffline (vérification par date exacte)
 async function dejaPayeAujourdhui(cotisant_id, date = today()) {
   const paiement = await db('paiements')
     .where({ cotisant_id, date })
@@ -27,13 +77,14 @@ exports.enregistrerManuel = async (req, res, next) => {
   try {
     const cible = await db('cotisants').where({ id: cotisant_id }).first();
     if (!cible) return res.status(404).json({ message: 'Cotisant introuvable.' });
-    if (req.user.role === 'COMMERCIAL' && cible.commercial_id !== req.user.id) {
+    if (req.user.role === 'COLLECTEUR' && cible.commercial_id !== req.user.id) {
       return res.status(403).json({ message: 'Ce cotisant ne fait pas partie de votre liste.' });
     }
 
-    if (await dejaPayeAujourdhui(cotisant_id)) {
+    const frequenceCible = cible.frequence_collecte || 'journalier';
+    if (await dejaPayePourPeriode(cotisant_id, frequenceCible)) {
       return res.status(409).json({
-        message: 'Ce cotisant a déjà payé aujourd\'hui. Confirmez-vous un second paiement ?',
+        message: 'Ce souscripteur a déjà payé pour cette période.',
         code: 'DOUBLON_PAIEMENT',
       });
     }
@@ -64,11 +115,12 @@ exports.creerSessionWave = async (req, res, next) => {
     if (!process.env.WAVE_API_KEY) {
       return res.status(503).json({ message: 'Clé API Wave non configurée.', code: 'WAVE_NON_CONFIGURE' });
     }
-    const { cotisant_id } = req.body;
+    const { cotisant_id, nbjours = 1 } = req.body;
+    const nbjoursVal = Math.min(180, Math.max(1, parseInt(nbjours, 10) || 1));
     const cotisant = await db('cotisants').where({ id: cotisant_id, actif: true }).first();
     if (!cotisant) return res.status(404).json({ message: 'Cotisant introuvable.' });
 
-    const montant = Math.round(Number(cotisant.montant_journalier));
+    const montant = Math.round(Number(cotisant.montant_journalier)) * nbjoursVal;
     const waveResp = await fetch(WAVE_API, {
       method: 'POST',
       headers: {
@@ -78,7 +130,7 @@ exports.creerSessionWave = async (req, res, next) => {
       body: JSON.stringify({
         amount: String(montant),
         currency: 'XOF',
-        client_reference: `cotisant-${cotisant.id}-${today()}`,
+        client_reference: `cotisant-${cotisant.id}-${today()}-${nbjoursVal}j`,
         success_url: 'https://collecte.mysimassurances.com/paiement-ok',
         error_url: 'https://collecte.mysimassurances.com/paiement-erreur',
       }),
@@ -88,8 +140,8 @@ exports.creerSessionWave = async (req, res, next) => {
       logger.error(`Wave API ${waveResp.status} : ${JSON.stringify(data)}`);
       return res.status(502).json({ message: 'Erreur API Wave.', detail: data });
     }
-    logger.info(`Session Wave ${data.id} créée — cotisant #${cotisant.id} (${montant} XOF)`);
-    res.status(201).json({ id: data.id, wave_launch_url: data.wave_launch_url, montant });
+    logger.info(`Session Wave ${data.id} créée — cotisant #${cotisant.id} (${montant} XOF, ${nbjoursVal}j)`);
+    res.status(201).json({ id: data.id, wave_launch_url: data.wave_launch_url, montant, nbjours: nbjoursVal });
   } catch (err) { next(err); }
 };
 
@@ -145,8 +197,8 @@ exports.webhookWave = async (req, res, next) => {
       return res.status(200).json({ message: 'Numéro non enregistré, paiement ignoré.' });
     }
 
-    if (await dejaPayeAujourdhui(cotisant.id)) {
-      logger.warn(`Wave webhook — doublon détecté cotisant #${cotisant.id}`);
+    if (await dejaPayePourPeriode(cotisant.id, cotisant.frequence_collecte || 'journalier')) {
+      logger.warn(`Wave webhook — doublon période détecté cotisant #${cotisant.id}`);
       sseClients.broadcast({ type: 'WAVE_DOUBLON', cotisant_id: cotisant.id });
       return res.status(200).json({ message: 'Doublon détecté, paiement ignoré.' });
     }
@@ -173,7 +225,7 @@ exports.webhookWave = async (req, res, next) => {
 exports.today = async (req, res, next) => {
   try {
     let query = db('paiements').where('paiements.date', today());
-    if (req.user.role === 'COMMERCIAL') query = query.where('paiements.commercial_id', req.user.id);
+    if (req.user.role === 'COLLECTEUR') query = query.where('paiements.commercial_id', req.user.id);
     const paiements = await query
       .join('cotisants', 'paiements.cotisant_id', 'cotisants.id')
       .select('paiements.*', 'cotisants.nom as cotisant_nom', 'cotisants.telephone');
@@ -186,7 +238,7 @@ exports.todaySommaire = async (req, res, next) => {
   try {
     const base = () => {
       let q = db('paiements').where({ date: today(), statut: 'paye' });
-      if (req.user.role === 'COMMERCIAL') q = q.where({ commercial_id: req.user.id });
+      if (req.user.role === 'COLLECTEUR') q = q.where({ commercial_id: req.user.id });
       return q;
     };
 
@@ -210,40 +262,76 @@ exports.todaySommaire = async (req, res, next) => {
 
 // Enregistrement paiement (Wave ou Manuel) depuis l'espace commercial
 exports.enregistrer = async (req, res, next) => {
-  const { cotisant_id, montant, mode, statut = 'paye', reference_wave } = req.body;
+  const { cotisant_id, montant, mode, statut = 'paye', reference_wave, nbjours = 1 } = req.body;
+  const nbjoursVal = Math.min(180, Math.max(1, parseInt(nbjours, 10) || 1));
   if (!cotisant_id || !montant || !mode) {
     return res.status(400).json({ message: 'cotisant_id, montant et mode sont obligatoires.' });
   }
   try {
-    // Un commercial ne peut encaisser que pour ses propres cotisants (anti-IDOR)
     const cible = await db('cotisants').where({ id: cotisant_id }).first();
     if (!cible) return res.status(404).json({ message: 'Cotisant introuvable.' });
-    if (req.user.role === 'COMMERCIAL' && cible.commercial_id !== req.user.id) {
+    if (req.user.role === 'COLLECTEUR' && cible.commercial_id !== req.user.id) {
       return res.status(403).json({ message: 'Ce cotisant ne fait pas partie de votre liste.' });
     }
 
-    if (await dejaPayeAujourdhui(cotisant_id)) {
+    const frequence = cible.frequence_collecte || 'journalier';
+
+    if (await dejaPayePourPeriode(cotisant_id, frequence)) {
       return res.status(409).json({
-        message: 'Ce cotisant a déjà payé aujourd\'hui.',
+        message: 'Ce souscripteur a déjà payé pour cette période.',
         code: 'DOUBLON_PAIEMENT',
       });
     }
-    const [paiement] = await db('paiements')
-      .insert({
-        cotisant_id,
-        commercial_id: req.user.id,
-        date: today(),
-        montant,
-        mode,
-        statut,
-        reference_wave: reference_wave || null,
-        horodatage: new Date(),
-      })
-      .returning('*');
 
-    logger.info(`Paiement #${paiement.id} [${mode}] — cotisant #${cotisant_id} par commercial #${req.user.id}`);
-    sseClients.broadcast({ type: 'PAIEMENT_NOUVEAU', paiement });
-    res.status(201).json(paiement);
+    if (nbjoursVal === 1) {
+      const [paiement] = await db('paiements')
+        .insert({
+          cotisant_id,
+          commercial_id: req.user.id,
+          date: today(),
+          montant,
+          mode,
+          statut,
+          reference_wave: reference_wave || null,
+          horodatage: new Date(),
+        })
+        .returning('*');
+
+      logger.info(`Paiement #${paiement.id} [${mode}/${frequence}] — cotisant #${cotisant_id} par commercial #${req.user.id}`);
+      sseClients.broadcast({ type: 'PAIEMENT_NOUVEAU', paiement });
+      return res.status(201).json(paiement);
+    }
+
+    // Anticipation multi-périodes : un enregistrement par période
+    const montantJour = Math.round(Number(cible.montant_journalier));
+    const paiements = [];
+    for (let i = 0; i < nbjoursVal; i++) {
+      // Période 0 → aujourd'hui, périodes futures → début de la période concernée
+      const date = i === 0 ? today() : debutPeriode(frequence, i);
+      const existe = await db('paiements')
+        .where({ cotisant_id, date })
+        .where('statut', '!=', 'annule')
+        .first();
+      if (!existe) {
+        const [p] = await db('paiements').insert({
+          cotisant_id,
+          commercial_id: req.user.id,
+          date,
+          montant: montantJour,
+          mode,
+          statut,
+          reference_wave: reference_wave || null,
+          horodatage: new Date(),
+        }).returning('*');
+        paiements.push(p);
+      }
+    }
+
+    if (paiements.length > 0) {
+      logger.info(`Paiement anticipé ${nbjoursVal} période(s) [${mode}/${frequence}] — cotisant #${cotisant_id} par commercial #${req.user.id}`);
+      sseClients.broadcast({ type: 'PAIEMENT_NOUVEAU', paiement: paiements[0] });
+    }
+    return res.status(201).json(paiements);
   } catch (err) { next(err); }
 };
 

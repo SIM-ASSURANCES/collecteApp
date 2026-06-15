@@ -7,7 +7,7 @@ router.use(auth, authorize('ADMIN', 'SUPERVISEUR'));
 
 router.get('/dashboard',    ctrl.dashboard);    // Compteurs du jour
 router.get('/taux-collecte', ctrl.tauxCollecte); // Taux journalier/hebdo/mensuel
-router.get('/commerciaux',  ctrl.classementCommerciaux);
+router.get('/collecteurs',  ctrl.classementCollecteurs);
 router.get('/retardataires', ctrl.retardataires); // Cotisants avec N jours impayÃ©s
 router.get('/export',       ctrl.export);        // CSV ou PDF
 

@@ -2,13 +2,14 @@ const { validationResult } = require('express-validator');
 const bcrypt = require('bcryptjs');
 const db = require('../config/db');
 const logger = require('../config/logger');
+const logActivite = require('../utils/logActivite');
 
 exports.list = async (req, res, next) => {
   try {
-    const commerciaux = await db('utilisateurs')
-      .where({ role: 'COMMERCIAL' })
+    const collecteurs = await db('utilisateurs')
+      .where({ role: 'COLLECTEUR' })
       .select('id', 'nom', 'identifiant', 'actif', 'derniere_connexion');
-    res.json(commerciaux);
+    res.json(collecteurs);
   } catch (err) { next(err); }
 };
 
@@ -17,24 +18,22 @@ const todayCI = () =>
 
 exports.getOne = async (req, res, next) => {
   try {
-    const commercial = await db('utilisateurs')
-      .where({ id: req.params.id, role: 'COMMERCIAL' })
+    const collecteur = await db('utilisateurs')
+      .where({ id: req.params.id, role: 'COLLECTEUR' })
       .select('id', 'nom', 'identifiant', 'actif', 'derniere_connexion')
       .first();
-    if (!commercial) return res.status(404).json({ message: 'Commercial introuvable.' });
+    if (!collecteur) return res.status(404).json({ message: 'Collecteur introuvable.' });
 
     const cotisants = await db('cotisants')
-      .where({ commercial_id: commercial.id, actif: true })
+      .where({ commercial_id: collecteur.id, actif: true })
       .select('id', 'nom', 'telephone', 'montant_journalier')
       .orderBy('nom');
 
-    // Paiements du jour de ce commercial
     const paiementsJour = await db('paiements')
-      .where({ commercial_id: commercial.id, date: todayCI(), statut: 'paye' })
+      .where({ commercial_id: collecteur.id, date: todayCI(), statut: 'paye' })
       .select('cotisant_id', 'montant', 'mode', 'horodatage');
     const payeMap = new Map(paiementsJour.map((p) => [p.cotisant_id, p]));
 
-    // CA collecté aujourd'hui / CA non collecté (cotisants non payés)
     let ca_collecte = 0;
     let ca_non_collecte = 0;
     const cotisantsEnrichis = cotisants.map((c) => {
@@ -49,13 +48,12 @@ exports.getOne = async (req, res, next) => {
       };
     });
 
-    // CA total collecté (toutes dates)
     const [{ total }] = await db('paiements')
-      .where({ commercial_id: commercial.id, statut: 'paye' })
+      .where({ commercial_id: collecteur.id, statut: 'paye' })
       .sum('montant as total');
 
     res.json({
-      ...commercial,
+      ...collecteur,
       cotisants: cotisantsEnrichis,
       nombre_cotisants: cotisants.length,
       nombre_payes: paiementsJour.length,
@@ -77,12 +75,13 @@ exports.create = async (req, res, next) => {
     if (existe) return res.status(409).json({ message: 'Cet identifiant est déjà utilisé.' });
 
     const hash = await bcrypt.hash(mot_de_passe, 10);
-    const [commercial] = await db('utilisateurs')
-      .insert({ nom, identifiant, mot_de_passe_hash: hash, role: 'COMMERCIAL' })
+    const [collecteur] = await db('utilisateurs')
+      .insert({ nom, identifiant, mot_de_passe_hash: hash, role: 'COLLECTEUR' })
       .returning('id', 'nom', 'identifiant', 'role');
 
-    logger.info(`Commercial créé #${commercial.id} par admin #${req.user.id}`);
-    res.status(201).json(commercial);
+    logger.info(`Collecteur créé #${collecteur.id} par admin #${req.user.id}`);
+    logActivite({ utilisateur_id: req.user.id, action: 'COLLECTEUR_CREE', entite: 'collecteur', entite_id: collecteur.id, details: { nom } });
+    res.status(201).json(collecteur);
   } catch (err) { next(err); }
 };
 
@@ -92,12 +91,12 @@ exports.update = async (req, res, next) => {
     const update = { nom, identifiant, updated_at: new Date() };
     if (mot_de_passe) update.mot_de_passe_hash = await bcrypt.hash(mot_de_passe, 10);
 
-    const [commercial] = await db('utilisateurs')
+    const [collecteur] = await db('utilisateurs')
       .where({ id: req.params.id })
       .update(update)
       .returning('id', 'nom', 'identifiant');
-    if (!commercial) return res.status(404).json({ message: 'Commercial introuvable.' });
-    res.json(commercial);
+    if (!collecteur) return res.status(404).json({ message: 'Collecteur introuvable.' });
+    res.json(collecteur);
   } catch (err) { next(err); }
 };
 
@@ -110,7 +109,7 @@ exports.reassignerCotisants = async (req, res, next) => {
     await db('cotisants')
       .whereIn('id', cotisant_ids)
       .update({ commercial_id: nouveau_commercial_id, updated_at: new Date() });
-    logger.info(`${cotisant_ids.length} cotisants réassignés au commercial #${nouveau_commercial_id}`);
+    logger.info(`${cotisant_ids.length} souscripteurs réassignés au collecteur #${nouveau_commercial_id}`);
     res.json({ message: `${cotisant_ids.length} cotisant(s) réassigné(s).` });
   } catch (err) { next(err); }
 };
@@ -121,40 +120,41 @@ exports.desactiver = async (req, res, next) => {
       .where({ id: req.params.id })
       .update({ actif: false })
       .returning('id', 'nom');
-    if (!u) return res.status(404).json({ message: 'Commercial introuvable.' });
-    res.json({ message: 'Commercial désactivé.', commercial: u });
+    if (!u) return res.status(404).json({ message: 'Collecteur introuvable.' });
+    res.json({ message: 'Collecteur désactivé.', collecteur: u });
   } catch (err) { next(err); }
 };
 
 exports.activer = async (req, res, next) => {
   try {
     const [u] = await db('utilisateurs')
-      .where({ id: req.params.id, role: 'COMMERCIAL' })
+      .where({ id: req.params.id, role: 'COLLECTEUR' })
       .update({ actif: true, updated_at: new Date() })
       .returning('id', 'nom');
-    if (!u) return res.status(404).json({ message: 'Commercial introuvable.' });
-    res.json({ message: 'Commercial réactivé.', commercial: u });
+    if (!u) return res.status(404).json({ message: 'Collecteur introuvable.' });
+    res.json({ message: 'Collecteur réactivé.', collecteur: u });
   } catch (err) { next(err); }
 };
 
 exports.supprimer = async (req, res, next) => {
   try {
     const id = Number(req.params.id);
-    const u = await db('utilisateurs').where({ id, role: 'COMMERCIAL' }).first();
-    if (!u) return res.status(404).json({ message: 'Commercial introuvable.' });
+    const u = await db('utilisateurs').where({ id, role: 'COLLECTEUR' }).first();
+    if (!u) return res.status(404).json({ message: 'Collecteur introuvable.' });
 
     const [{ nc }] = await db('cotisants').where({ commercial_id: id }).count('id as nc');
     const [{ np }] = await db('paiements').where({ commercial_id: id }).count('id as np');
     const [{ nr }] = await db('reversements').where({ commercial_id: id }).count('id as nr');
     if (Number(nc) > 0 || Number(np) > 0 || Number(nr) > 0) {
       return res.status(409).json({
-        message: `Suppression impossible : ${nc} cotisant(s), ${np} paiement(s) et ${nr} reversement(s) liés. `
-          + 'Réassignez ses cotisants puis désactivez-le.',
+        message: `Suppression impossible : ${nc} souscripteur(s), ${np} paiement(s) et ${nr} reversement(s) liés. `
+          + 'Réassignez ses souscripteurs puis désactivez-le.',
         code: 'A_DES_LIENS',
       });
     }
     await db('utilisateurs').where({ id }).del();
-    logger.info(`Commercial #${id} supprimé par admin #${req.user.id}`);
-    res.json({ message: 'Commercial supprimé.' });
+    logger.info(`Collecteur #${id} supprimé par admin #${req.user.id}`);
+    logActivite({ utilisateur_id: req.user.id, action: 'COLLECTEUR_SUPPRIME', entite: 'collecteur', entite_id: id, details: { nom: u.nom } });
+    res.json({ message: 'Collecteur supprimé.' });
   } catch (err) { next(err); }
 };

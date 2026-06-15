@@ -8,8 +8,8 @@ export default function AppLayout() {
   const location = useLocation();
 
   if (!isAuthenticated()) return <Navigate to="/login" replace />;
-  // Le commercial ne peut pas accéder à l'espace admin
-  if (user?.role === 'COMMERCIAL') return <Navigate to="/commercial" replace />;
+  // Le collecteur ne peut pas accéder à l'espace admin
+  if (user?.role === 'COLLECTEUR') return <Navigate to="/collecteur" replace />;
 
   // Garde par permission : un superviseur ne voit que ses pages autorisées
   const page = PERMISSIONS.find(p => p.path === location.pathname);

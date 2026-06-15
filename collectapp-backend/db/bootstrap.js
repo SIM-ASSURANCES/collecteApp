@@ -47,17 +47,17 @@ const ADMIN_NOM = process.env.ADMIN_NOM         || 'Administrateur';
       console.log(`Compte admin "${ADMIN_ID}" créé.`);
     }
 
-    // Commercial de test : uniquement si la base ne contient encore aucun commercial
-    const { n } = await knex('utilisateurs').where({ role: 'COMMERCIAL' }).count('id as n').first();
+    // Collecteur de test : uniquement si la base ne contient encore aucun collecteur
+    const { n } = await knex('utilisateurs').where({ role: 'COLLECTEUR' }).count('id as n').first();
     if (Number(n) === 0) {
       await knex('utilisateurs').insert({
-        nom: 'Commercial Test',
-        identifiant: 'commercial1',
+        nom: 'Collecteur Test',
+        identifiant: 'collecteur1',
         mot_de_passe_hash: await bcrypt.hash('Test123!', 10),
-        role: 'COMMERCIAL',
+        role: 'COLLECTEUR',
         actif: true,
       });
-      console.log('Commercial de test "commercial1" créé.');
+      console.log('Collecteur de test "collecteur1" créé.');
     }
 
     await knex.destroy();

@@ -58,12 +58,13 @@ if (!isProd) {
 
 // Routes
 app.use('/api/auth',         require('./routes/auth.routes'));
-app.use('/api/cotisants',    require('./routes/cotisants.routes'));
-app.use('/api/commerciaux',  require('./routes/commerciaux.routes'));
+app.use('/api/souscripteurs', require('./routes/souscripteurs.routes'));
+app.use('/api/collecteurs',   require('./routes/collecteurs.routes'));
 app.use('/api/paiements',    require('./routes/paiements.routes'));
 app.use('/api/reversements', require('./routes/reversements.routes'));
 app.use('/api/stats',        require('./routes/stats.routes'));
 app.use('/api/utilisateurs', require('./routes/utilisateurs.routes'));
+app.use('/api/journal',      require('./routes/journal.routes'));
 
 // Santé
 app.get('/health', (req, res) => res.json({ status: 'ok', timestamp: new Date() }));

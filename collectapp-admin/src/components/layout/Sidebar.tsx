@@ -1,19 +1,20 @@
 import { NavLink } from 'react-router-dom';
 import {
   LayoutDashboard, Users, UserCog, BarChart2,
-  AlertTriangle, LogOut, Wallet, ShieldCheck,
+  AlertTriangle, LogOut, Wallet, ShieldCheck, ScrollText,
 } from 'lucide-react';
 import { useAuthStore } from '../../store/authStore';
 import { hasPermission, type PermissionKey } from '../../lib/permissions';
 
 const allLinks: { to: string; icon: typeof Users; label: string; perm: PermissionKey }[] = [
-  { to: '/',             icon: LayoutDashboard, label: 'Tableau de bord', perm: 'dashboard'    },
-  { to: '/cotisants',    icon: Users,            label: 'Cotisants',       perm: 'cotisants'    },
-  { to: '/commerciaux',  icon: UserCog,          label: 'Commerciaux',     perm: 'commerciaux'  },
-  { to: '/reversements', icon: Wallet,           label: 'Reversements',    perm: 'reversements' },
-  { to: '/statistiques', icon: BarChart2,        label: 'Statistiques',    perm: 'statistiques' },
-  { to: '/relances',     icon: AlertTriangle,    label: 'Relances',        perm: 'relances'     },
-  { to: '/utilisateurs', icon: ShieldCheck,      label: 'Utilisateurs',    perm: 'utilisateurs' },
+  { to: '/',               icon: LayoutDashboard, label: 'Tableau de bord', perm: 'dashboard'     },
+  { to: '/souscripteurs',  icon: Users,            label: 'Souscripteurs',   perm: 'souscripteurs' },
+  { to: '/collecteurs',    icon: UserCog,          label: 'Collecteurs',     perm: 'collecteurs'   },
+  { to: '/reversements',   icon: Wallet,           label: 'Reversements',    perm: 'reversements'  },
+  { to: '/statistiques',   icon: BarChart2,        label: 'Statistiques',    perm: 'statistiques'  },
+  { to: '/relances',       icon: AlertTriangle,    label: 'Relances',        perm: 'relances'      },
+  { to: '/journal',        icon: ScrollText,       label: 'Journal',         perm: 'journal'       },
+  { to: '/utilisateurs',   icon: ShieldCheck,      label: 'Utilisateurs',    perm: 'utilisateurs'  },
 ];
 
 export default function Sidebar() {

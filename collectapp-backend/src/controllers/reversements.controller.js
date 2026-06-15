@@ -1,6 +1,7 @@
 const { validationResult } = require('express-validator');
 const db = require('../config/db');
 const logger = require('../config/logger');
+const logActivite = require('../utils/logActivite');
 
 // Date du jour au fuseau de la Côte d'Ivoire (Africa/Abidjan, UTC+0)
 const today = () =>
@@ -109,7 +110,7 @@ exports.statutWave = async (req, res, next) => {
   try {
     const r = await db('reversements').where({ id: req.params.id }).first();
     if (!r) return res.status(404).json({ message: 'Reversement introuvable.' });
-    if (req.user.role === 'COMMERCIAL' && r.commercial_id !== req.user.id) {
+    if (req.user.role === 'COLLECTEUR' && r.commercial_id !== req.user.id) {
       return res.status(403).json({ message: 'Accès refusé.' });
     }
     const wave_payment_status = await verifierWave(r);
@@ -198,6 +199,7 @@ exports.valider = async (req, res, next) => {
       .update({ statut: 'valide', valide_par: req.user.id, valide_le: new Date() })
       .returning('*');
     logger.info(`Reversement #${r.id} validé par admin #${req.user.id} (Wave confirmé)`);
+    logActivite({ utilisateur_id: req.user.id, action: 'REVERSEMENT_VALIDE', entite: 'reversement', entite_id: r.id });
     res.json(maj);
   } catch (err) { next(err); }
 };
@@ -218,6 +220,7 @@ exports.supprimer = async (req, res, next) => {
     const n = await db('reversements').where({ id: req.params.id }).del();
     if (!n) return res.status(404).json({ message: 'Reversement introuvable.' });
     logger.info(`Reversement #${req.params.id} supprimé par admin #${req.user.id}`);
+    logActivite({ utilisateur_id: req.user.id, action: 'REVERSEMENT_SUPPRIME', entite: 'reversement', entite_id: Number(req.params.id) });
     res.json({ message: 'Reversement supprimé.' });
   } catch (err) { next(err); }
 };

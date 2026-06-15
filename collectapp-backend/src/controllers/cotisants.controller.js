@@ -7,7 +7,7 @@ exports.list = async (req, res, next) => {
     const { commercial_id, statut, page = 1, limit = 50 } = req.query;
     let query = db('cotisants').where({});
     // Un commercial ne peut voir que ses propres cotisants
-    if (req.user.role === 'COMMERCIAL') {
+    if (req.user.role === 'COLLECTEUR') {
       query = query.where({ commercial_id: req.user.id });
     } else if (commercial_id) {
       query = query.where({ commercial_id });
@@ -33,7 +33,7 @@ exports.search = async (req, res, next) => {
       .where({ actif: true })
       // Un commercial ne cherche que parmi ses propres cotisants
       .modify((qb) => {
-        if (req.user.role === 'COMMERCIAL') qb.where({ commercial_id: req.user.id });
+        if (req.user.role === 'COLLECTEUR') qb.where({ commercial_id: req.user.id });
       })
       .andWhere((qb) => {
         qb.where('nom', 'ilike', `%${q}%`).orWhere('telephone', 'ilike', `%${q}%`);
@@ -48,7 +48,7 @@ exports.getOne = async (req, res, next) => {
     const cotisant = await db('cotisants').where({ id: req.params.id }).first();
     if (!cotisant) return res.status(404).json({ message: 'Cotisant introuvable.' });
     // Un commercial ne consulte que ses propres cotisants (anti-IDOR)
-    if (req.user.role === 'COMMERCIAL' && cotisant.commercial_id !== req.user.id) {
+    if (req.user.role === 'COLLECTEUR' && cotisant.commercial_id !== req.user.id) {
       return res.status(403).json({ message: 'Accès refusé.' });
     }
     res.json(cotisant);
@@ -70,7 +70,7 @@ exports.historique = async (req, res, next) => {
     if (!cotisant) return res.status(404).json({ message: 'Cotisant introuvable.' });
 
     // Un commercial ne consulte que ses propres cotisants
-    if (req.user.role === 'COMMERCIAL' && cotisant.commercial_id !== req.user.id) {
+    if (req.user.role === 'COLLECTEUR' && cotisant.commercial_id !== req.user.id) {
       return res.status(403).json({ message: 'Accès refusé.' });
     }
 

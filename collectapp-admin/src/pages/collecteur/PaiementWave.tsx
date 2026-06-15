@@ -1,51 +1,53 @@
 /**
  * Paiement Wave — scan QR ou saisie du numéro, puis confirmation
- * Route : /commercial/wave  (peut recevoir state.cotisant depuis MaListe ou Paiement)
- * Max 2 interactions : [1] Sélectionner cotisant, [2] Confirmer le paiement
+ * Route : /collecteur/wave  (peut recevoir state.cotisant depuis MaListe ou Paiement)
  */
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useCallback } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { Smartphone, CheckCircle2, XCircle, Search, ArrowLeft, Loader2, RefreshCw } from 'lucide-react';
+import { Smartphone, CheckCircle2, XCircle, Search, ArrowLeft, Loader2, RefreshCw, CalendarDays } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import toast from 'react-hot-toast';
 import api from '../../api/axios';
 import { addToOfflineQueue } from '../../hooks/usePendingSync';
 import { useNetworkStatus } from '../../hooks/useNetworkStatus';
-import type { Cotisant } from '../../types';
+import { ANTICIPATION_PAR_FREQUENCE, FREQ_PERIODE_LABEL } from '../../lib/anticipation';
+import type { Souscripteur, FrequenceCollecte } from '../../types';
 
-interface LocationState { cotisant?: Cotisant }
-
+interface LocationState { cotisant?: Souscripteur }
 type Etape = 'selection' | 'confirmation' | 'succes' | 'doublon';
 
 export default function PaiementWave() {
-  const navigate   = useNavigate();
-  const location   = useLocation();
-  const isOnline   = useNetworkStatus();
+  const navigate    = useNavigate();
+  const location    = useLocation();
+  const isOnline    = useNetworkStatus();
   const preselected = (location.state as LocationState)?.cotisant;
 
-  const [etape, setEtape]             = useState<Etape>(preselected ? 'confirmation' : 'selection');
-  const [cotisant, setCotisant]       = useState<Cotisant | null>(preselected ?? null);
-  const [searchText, setSearchText]   = useState('');
-  const [polling, setPolling]         = useState(false);
+  const [etape, setEtape]           = useState<Etape>(preselected ? 'confirmation' : 'selection');
+  const [cotisant, setCotisant]     = useState<Souscripteur | null>(preselected ?? null);
+  const [searchText, setSearchText] = useState('');
+  const [polling, setPolling]       = useState(false);
+  const [nbperiodes, setNbperiodes] = useState(1);
 
-  // Liste cotisants pour la sélection
-  const { data: cotisants = [] } = useQuery<Cotisant[]>({
-    queryKey: ['cotisants-wave'],
-    queryFn: () => api.get('/cotisants').then(r => r.data),
+  const { data: cotisants = [] } = useQuery<Souscripteur[]>({
+    queryKey: ['souscripteurs-wave'],
+    queryFn: () => api.get('/souscripteurs').then(r => r.data),
     enabled: etape === 'selection',
   });
 
-  // Session Wave Checkout — créée à l'arrivée sur l'étape confirmation
+  const frequence = (cotisant?.frequence_collecte ?? 'journalier') as FrequenceCollecte;
+  const anticipationOptions = ANTICIPATION_PAR_FREQUENCE[frequence] ?? ANTICIPATION_PAR_FREQUENCE.journalier;
+
+  // Session Wave — recréée si souscripteur ou nb périodes change
   const {
     data: waveSession,
     isLoading: sessionLoading,
     isError: sessionError,
     refetch: refetchSession,
-  } = useQuery<{ id: string; wave_launch_url: string; montant: number }>({
-    queryKey: ['wave-session', cotisant?.id],
+  } = useQuery<{ id: string; wave_launch_url: string; montant: number; nbjours: number }>({
+    queryKey: ['wave-session', cotisant?.id, nbperiodes],
     queryFn: () =>
-      api.post('/paiements/wave/session', { cotisant_id: cotisant!.id }).then(r => r.data),
+      api.post('/paiements/wave/session', { cotisant_id: cotisant!.id, nbjours: nbperiodes }).then(r => r.data),
     enabled: etape === 'confirmation' && !!cotisant && isOnline,
     staleTime: Infinity,
     retry: 1,
@@ -56,31 +58,27 @@ export default function PaiementWave() {
     (c.nom.toLowerCase().includes(searchText.toLowerCase()) || c.telephone.includes(searchText))
   );
 
-  // Mutation : enregistrer paiement Wave
   const paiementMutation = useMutation({
-    mutationFn: async (data: { cotisant_id: number; montant: number; reference_wave?: string }) => {
-      return api.post('/paiements', { ...data, mode: 'wave', statut: 'paye' });
-    },
-    onSuccess: () => {
-      setEtape('succes');
-      setPolling(false);
-    },
+    mutationFn: async (data: { cotisant_id: number; montant: number; reference_wave?: string; nbjours: number }) =>
+      api.post('/paiements', { ...data, mode: 'wave', statut: 'paye' }),
+    onSuccess: () => { setEtape('succes'); setPolling(false); },
     onError: (err: any) => {
-      if (err?.response?.status === 409) {
-        setEtape('doublon');
-      } else {
-        toast.error('Erreur lors de l\'enregistrement du paiement');
-      }
+      if (err?.response?.status === 409) setEtape('doublon');
+      else toast.error('Erreur lors de l\'enregistrement du paiement');
       setPolling(false);
     },
   });
 
-  // Confirmer le paiement (en ligne ou hors ligne)
   const handleConfirmer = useCallback(async () => {
     if (!cotisant) return;
     setPolling(true);
 
     if (!isOnline) {
+      if (nbperiodes > 1) {
+        toast.error('La collecte anticipée nécessite une connexion internet.');
+        setPolling(false);
+        return;
+      }
       addToOfflineQueue({
         type: 'paiement_wave',
         cotisant_id: cotisant.id,
@@ -93,33 +91,41 @@ export default function PaiementWave() {
       return;
     }
 
-    // Vérifier le statut du paiement chez Wave avant d'enregistrer
+    // Vérification stricte du statut Wave — aucune confirmation sans paiement réel
     if (waveSession) {
       try {
         const { data: st } = await api.get(`/paiements/wave/session/${waveSession.id}`);
         if (st.payment_status !== 'succeeded') {
-          const force = window.confirm(
-            'Wave n\'a pas encore confirmé ce paiement.\nVoulez-vous quand même l\'enregistrer ?'
-          );
-          if (!force) { setPolling(false); return; }
+          toast.error('Le souscripteur n\'a pas encore effectué le paiement Wave. Attendez la confirmation.');
+          setPolling(false);
+          return;
         }
-      } catch { /* Wave injoignable → confirmation manuelle autorisée */ }
+      } catch {
+        toast.error('Impossible de vérifier le statut du paiement Wave. Réessayez.');
+        setPolling(false);
+        return;
+      }
     }
 
     paiementMutation.mutate({
       cotisant_id: cotisant.id,
       montant: Number(cotisant.montant_journalier),
       reference_wave: waveSession?.id,
+      nbjours: nbperiodes,
     });
-  }, [cotisant, isOnline, paiementMutation, waveSession]);
+  }, [cotisant, isOnline, nbperiodes, paiementMutation, waveSession]);
 
-  const handleSelectCotisant = (c: Cotisant) => {
+  const handleSelectCotisant = (c: Souscripteur) => {
     setCotisant(c);
+    setNbperiodes(1);
     setEtape('confirmation');
   };
 
-  // ──────────────────────── RENDU ────────────────────────
+  const montantPeriode = Number(cotisant?.montant_journalier ?? 0);
+  const montantTotal   = montantPeriode * nbperiodes;
+  const periodeLabel   = FREQ_PERIODE_LABEL[frequence] ?? 'période';
 
+  // ── SUCCÈS ───────────────────────────────────────────────
   if (etape === 'succes') {
     return (
       <div className="p-6 flex flex-col items-center justify-center min-h-[60vh] gap-5">
@@ -136,16 +142,23 @@ export default function PaiementWave() {
           )}
           <p className="text-sm text-gray-500 mt-2">{cotisant?.nom}</p>
           <p className="text-2xl font-bold mt-2" style={{ color: '#004B9C' }}>
-            {Number(cotisant?.montant_journalier).toLocaleString()} FCFA
+            {montantTotal.toLocaleString()} FCFA
           </p>
-          <p className="text-xs text-gray-400 mt-1">Wave · {new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</p>
+          {nbperiodes > 1 && (
+            <p className="text-xs text-gray-400 mt-0.5">
+              {nbperiodes} {periodeLabel}s × {montantPeriode.toLocaleString()} FCFA
+            </p>
+          )}
+          <p className="text-xs text-gray-400 mt-1">
+            Wave · {new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
+          </p>
         </div>
         <div className="flex flex-col gap-3 w-full mt-2">
-          <button onClick={() => { setEtape('selection'); setCotisant(null); setSearchText(''); }}
+          <button onClick={() => { setEtape('selection'); setCotisant(null); setSearchText(''); setNbperiodes(1); }}
                   className="sim-btn-primary w-full py-3 rounded-xl">
             Nouveau paiement
           </button>
-          <button onClick={() => navigate('/commercial')}
+          <button onClick={() => navigate('/collecteur')}
                   className="sim-btn-secondary w-full py-3 rounded-xl">
             Retour à la liste
           </button>
@@ -154,6 +167,7 @@ export default function PaiementWave() {
     );
   }
 
+  // ── DOUBLON ───────────────────────────────────────────────
   if (etape === 'doublon') {
     return (
       <div className="p-6 flex flex-col items-center justify-center min-h-[60vh] gap-5">
@@ -162,14 +176,14 @@ export default function PaiementWave() {
         </div>
         <div className="text-center">
           <p className="text-lg font-bold text-gray-800">Paiement déjà enregistré</p>
-          <p className="text-sm text-gray-500 mt-2">{cotisant?.nom} a déjà payé aujourd'hui.</p>
+          <p className="text-sm text-gray-500 mt-2">{cotisant?.nom} a déjà payé pour cette période.</p>
         </div>
         <div className="flex flex-col gap-3 w-full mt-2">
-          <button onClick={() => { setEtape('selection'); setCotisant(null); }}
+          <button onClick={() => { setEtape('selection'); setCotisant(null); setNbperiodes(1); }}
                   className="sim-btn-primary w-full py-3 rounded-xl">
-            Choisir un autre cotisant
+            Choisir un autre souscripteur
           </button>
-          <button onClick={() => navigate('/commercial')}
+          <button onClick={() => navigate('/collecteur')}
                   className="sim-btn-secondary w-full py-3 rounded-xl">
             Retour à la liste
           </button>
@@ -178,15 +192,16 @@ export default function PaiementWave() {
     );
   }
 
+  // ── CONFIRMATION ──────────────────────────────────────────
   if (etape === 'confirmation' && cotisant) {
     return (
-      <div className="p-4 space-y-5">
-        <button onClick={() => setEtape('selection')}
+      <div className="p-4 space-y-4">
+        <button onClick={() => { setEtape('selection'); setNbperiodes(1); }}
                 className="flex items-center gap-2 text-sm font-medium" style={{ color: '#004B9C' }}>
-          <ArrowLeft size={16} /> Changer de cotisant
+          <ArrowLeft size={16} /> Changer de souscripteur
         </button>
 
-        {/* Infos cotisant */}
+        {/* Infos souscripteur */}
         <div className="bg-white rounded-2xl p-4 flex items-center gap-3"
              style={{ boxShadow: '0 2px 8px rgba(0,75,156,0.08)' }}>
           <div className="w-11 h-11 rounded-full flex items-center justify-center text-white font-bold"
@@ -197,12 +212,52 @@ export default function PaiementWave() {
             <p className="font-bold text-gray-800">{cotisant.nom}</p>
             <p className="text-xs text-gray-400 font-mono">{cotisant.telephone}</p>
           </div>
-          <p className="font-bold text-lg" style={{ color: '#004B9C' }}>
-            {Number(cotisant.montant_journalier).toLocaleString()} F
-          </p>
+          <div className="text-right">
+            <p className="font-bold text-lg" style={{ color: '#004B9C' }}>
+              {montantTotal.toLocaleString()} F
+            </p>
+            {nbperiodes > 1 && (
+              <p className="text-xs text-gray-400">{nbperiodes} {periodeLabel}s</p>
+            )}
+          </div>
         </div>
 
-        {/* QR Wave réel (session Checkout) */}
+        {/* Sélecteur d'anticipation */}
+        {anticipationOptions.length > 0 && (
+          <div className="bg-white rounded-2xl p-4" style={{ boxShadow: '0 2px 8px rgba(0,75,156,0.08)' }}>
+            <div className="flex items-center gap-2 mb-3">
+              <CalendarDays size={15} style={{ color: '#004B9C' }} />
+              <p className="text-sm font-semibold" style={{ color: '#004B9C' }}>Paiement anticipé</p>
+              {nbperiodes > 1 && (
+                <button onClick={() => setNbperiodes(1)}
+                        className="ml-auto text-xs px-2 py-0.5 rounded-full font-medium"
+                        style={{ background: '#FEE2E2', color: '#DC2626' }}>
+                  Annuler
+                </button>
+              )}
+            </div>
+            <div className="flex gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none' }}>
+              {anticipationOptions.map(opt => (
+                <button
+                  key={opt.nbperiodes}
+                  onClick={() => setNbperiodes(nbperiodes === opt.nbperiodes ? 1 : opt.nbperiodes)}
+                  className="flex-shrink-0 px-3 py-1.5 rounded-xl text-xs font-semibold transition"
+                  style={nbperiodes === opt.nbperiodes
+                    ? { background: '#004B9C', color: '#fff' }
+                    : { background: '#EBF3FC', color: '#004B9C' }}>
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+            {nbperiodes > 1 && (
+              <p className="text-xs text-gray-500 mt-2">
+                {nbperiodes} {periodeLabel}s d'avance — total {montantTotal.toLocaleString()} FCFA
+              </p>
+            )}
+          </div>
+        )}
+
+        {/* QR Wave */}
         <div className="bg-white rounded-2xl p-6 flex flex-col items-center gap-4"
              style={{ boxShadow: '0 2px 8px rgba(0,75,156,0.08)' }}>
           <div className="flex items-center gap-2">
@@ -224,7 +279,7 @@ export default function PaiementWave() {
                    style={{ borderColor: '#E5E7EB' }}>
                 <XCircle size={32} className="text-gray-300" />
                 <p className="text-xs text-gray-400">
-                  {sessionError ? 'QR Wave indisponible — encaissez via le numéro' : 'Hors ligne — QR indisponible'}
+                  {sessionError ? 'QR Wave indisponible' : 'Hors ligne — QR indisponible'}
                 </p>
               </div>
               {sessionError && isOnline && (
@@ -258,7 +313,6 @@ export default function PaiementWave() {
           )}
         </div>
 
-        {/* Bouton confirmation */}
         <button onClick={handleConfirmer} disabled={polling}
                 className="sim-btn-primary w-full py-4 rounded-2xl text-base flex items-center justify-center gap-3 transition">
           {polling
@@ -274,10 +328,10 @@ export default function PaiementWave() {
     );
   }
 
-  // ÉTAPE 1 : sélection cotisant
+  // ── SÉLECTION ─────────────────────────────────────────────
   return (
     <div className="p-4 space-y-4">
-      <p className="font-semibold text-sm text-gray-600">Sélectionner le cotisant</p>
+      <p className="font-semibold text-sm text-gray-600">Sélectionner le souscripteur</p>
 
       <div className="relative">
         <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
@@ -290,7 +344,7 @@ export default function PaiementWave() {
 
       <div className="space-y-2 max-h-[55vh] overflow-y-auto">
         {filtres.length === 0 ? (
-          <p className="text-center text-gray-400 text-sm py-8">Aucun cotisant trouvé</p>
+          <p className="text-center text-gray-400 text-sm py-8">Aucun souscripteur trouvé</p>
         ) : filtres.map(c => (
           <button key={c.id} onClick={() => handleSelectCotisant(c)}
                   className="w-full bg-white rounded-xl p-4 flex items-center gap-3 text-left transition active:scale-95"

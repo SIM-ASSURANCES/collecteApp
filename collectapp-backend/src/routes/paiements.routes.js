@@ -13,16 +13,19 @@ router.use(auth);
 // Session Wave Checkout (QR réel) — création + vérification de statut
 router.post(
   '/wave/session',
-  authorize('COMMERCIAL', 'ADMIN'),
-  [body('cotisant_id').isInt()],
+  authorize('COLLECTEUR', 'ADMIN'),
+  [
+    body('cotisant_id').isInt(),
+    body('nbjours').optional().isInt({ min: 1, max: 180 }),
+  ],
   ctrl.creerSessionWave
 );
-router.get('/wave/session/:id', authorize('COMMERCIAL', 'ADMIN'), ctrl.statutSessionWave);
+router.get('/wave/session/:id', authorize('COLLECTEUR', 'ADMIN'), ctrl.statutSessionWave);
 
 // Enregistrement paiement (Wave ou Manuel) depuis espace commercial — route générique
 router.post(
   '/',
-  authorize('COMMERCIAL', 'ADMIN'),
+  authorize('COLLECTEUR', 'ADMIN'),
   [
     body('cotisant_id').isInt(),
     body('montant').isFloat({ gt: 0 }),
@@ -34,7 +37,7 @@ router.post(
 // Enregistrement paiement manuel historique (route conservée pour compatibilité)
 router.post(
   '/manuel',
-  authorize('COMMERCIAL', 'ADMIN'),
+  authorize('COLLECTEUR', 'ADMIN'),
   [
     body('cotisant_id').isInt(),
     body('montant').isFloat({ gt: 0 }),
@@ -53,6 +56,6 @@ router.get('/today', ctrl.today);
 router.get('/cotisant/:id', auth, authorize('ADMIN'), param('id').isInt(), ctrl.historiqueCotisant);
 
 // Synchronisation offline (commercial)
-router.post('/sync', authorize('COMMERCIAL'), ctrl.syncOffline);
+router.post('/sync', authorize('COLLECTEUR'), ctrl.syncOffline);
 
 module.exports = router;

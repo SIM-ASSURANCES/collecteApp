@@ -25,7 +25,7 @@ export default function Statistiques() {
 
   const { data: classement = [] } = useQuery({
     queryKey: ['classement', debut, fin],
-    queryFn: () => api.get(`/stats/commerciaux?debut=${debut}&fin=${fin}`).then(r => r.data),
+    queryFn: () => api.get(`/stats/collecteurs?debut=${debut}&fin=${fin}`).then(r => r.data),
   });
 
   const { data: retard = [] } = useQuery({
@@ -99,7 +99,7 @@ export default function Statistiques() {
               <Award size={22} style={{ color: '#059669' }} />
             </div>
             <div>
-              <p className="text-xs text-gray-500 uppercase tracking-wide">Meilleur commercial</p>
+              <p className="text-xs text-gray-500 uppercase tracking-wide">Meilleur collecteur</p>
               <p className="text-base font-bold mt-0.5" style={{ color: '#059669' }}>
                 {classement[0]?.nom ?? '—'}
               </p>
@@ -123,9 +123,9 @@ export default function Statistiques() {
 
         {/* Graphiques */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Bar — classement commerciaux */}
+          {/* Bar — classement collecteurs */}
           <div className="sim-card p-5">
-            <p className="sim-section-title mb-4">Classement des commerciaux</p>
+            <p className="sim-section-title mb-4">Classement des collecteurs</p>
             {barData.length > 0 ? (
               <ResponsiveContainer width="100%" height={240}>
                 <BarChart data={barData} barSize={24}>
@@ -173,10 +173,10 @@ export default function Statistiques() {
         {barData.length > 0 && (
           <div className="sim-card overflow-hidden">
             <div className="p-4 border-b border-gray-100">
-              <p className="sim-section-title">Détail par commercial</p>
+              <p className="sim-section-title">Détail par collecteur</p>
             </div>
             <table className="sim-table w-full">
-              <thead><tr><th>Rang</th><th>Commercial</th><th>Paiements</th><th>Montant collecté</th><th>Progression</th></tr></thead>
+              <thead><tr><th>Rang</th><th>Collecteur</th><th>Paiements</th><th>Montant collecté</th><th>Progression</th></tr></thead>
               <tbody>
                 {classement.map((c: { nom: string; total_collecte: string; nb_paiements: string }, i: number) => {
                   const max = parseFloat(classement[0]?.total_collecte ?? '1');

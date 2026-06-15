@@ -1,12 +1,12 @@
 /**
  * Page dispatch : cotisant sélectionné depuis MaListe → choix Wave ou Manuel
- * Route : /commercial/paiement (avec state.cotisant)
+ * Route : /collecteur/paiement (avec state.cotisant)
  */
 import { useLocation, useNavigate } from 'react-router-dom';
 import { CheckCircle2, Smartphone, Banknote, ArrowLeft } from 'lucide-react';
-import type { Cotisant } from '../../types';
+import type { Souscripteur } from '../../types';
 
-interface LocationState { cotisant: Cotisant & { paye_aujourd_hui?: boolean; heure_paiement?: string; mode_paiement?: string } }
+interface LocationState { cotisant: Souscripteur & { paye_aujourd_hui?: boolean; heure_paiement?: string; mode_paiement?: string } }
 
 export default function Paiement() {
   const navigate = useNavigate();
@@ -14,7 +14,7 @@ export default function Paiement() {
   const { cotisant } = (location.state as LocationState) ?? {};
 
   if (!cotisant) {
-    navigate('/commercial');
+    navigate('/collecteur');
     return null;
   }
 
@@ -38,7 +38,7 @@ export default function Paiement() {
             {Number(cotisant.montant_journalier).toLocaleString()} FCFA
           </p>
         </div>
-        <button onClick={() => navigate('/commercial')}
+        <button onClick={() => navigate('/collecteur')}
                 className="sim-btn-primary w-full py-3 rounded-xl mt-2">
           Retour à la liste
         </button>
@@ -48,7 +48,7 @@ export default function Paiement() {
 
   return (
     <div className="p-4 space-y-6">
-      <button onClick={() => navigate('/commercial')}
+      <button onClick={() => navigate('/collecteur')}
               className="flex items-center gap-2 text-sm font-medium" style={{ color: '#004B9C' }}>
         <ArrowLeft size={16} /> Retour à la liste
       </button>
@@ -65,14 +65,14 @@ export default function Paiement() {
         <p className="text-2xl font-bold mt-3" style={{ color: '#004B9C' }}>
           {Number(cotisant.montant_journalier).toLocaleString()} FCFA
         </p>
-        <p className="text-xs text-gray-400 mt-0.5">Cotisation journalière</p>
+        <p className="text-xs text-gray-400 mt-0.5">Souscription journalière</p>
       </div>
 
       {/* Choix du mode de paiement */}
       <p className="text-sm font-semibold text-gray-600 text-center">Choisir le mode de paiement</p>
 
       <div className="space-y-3">
-        <button onClick={() => navigate('/commercial/wave', { state: { cotisant } })}
+        <button onClick={() => navigate('/collecteur/wave', { state: { cotisant } })}
                 className="w-full bg-white rounded-2xl p-5 flex items-center gap-4 text-left transition active:scale-95"
                 style={{ boxShadow: '0 2px 10px rgba(0,75,156,0.08)', border: '2px solid #EBF3FC' }}>
           <div className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0"
@@ -88,7 +88,7 @@ export default function Paiement() {
           </span>
         </button>
 
-        <button onClick={() => navigate('/commercial/manuel', { state: { cotisant } })}
+        <button onClick={() => navigate('/collecteur/manuel', { state: { cotisant } })}
                 className="w-full bg-white rounded-2xl p-5 flex items-center gap-4 text-left transition active:scale-95"
                 style={{ boxShadow: '0 2px 10px rgba(0,75,156,0.08)', border: '2px solid #F0FDF4' }}>
           <div className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0"

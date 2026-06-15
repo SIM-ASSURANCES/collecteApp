@@ -9,23 +9,23 @@ router.use(auth);
 // Commercial dÃ©clare son reversement
 router.post(
   '/',
-  authorize('COMMERCIAL'),
+  authorize('COLLECTEUR'),
   [body('montant_declare').isFloat({ gt: 0 })],
   ctrl.declarer
 );
 
 // Commercial vÃ©rifie si un reversement a dÃ©jÃ  Ã©tÃ© soumis aujourd'hui
-router.get('/today', authorize('COMMERCIAL'), ctrl.todayReversement);
+router.get('/today', authorize('COLLECTEUR'), ctrl.todayReversement);
 
 // Historique des reversements du commercial connecte
-router.get('/mes', authorize('COMMERCIAL'), ctrl.mesReversements);
+router.get('/mes', authorize('COLLECTEUR'), ctrl.mesReversements);
 
 // Session Wave pour regler un reversement
-router.post('/wave-session', authorize('COMMERCIAL'),
+router.post('/wave-session', authorize('COLLECTEUR'),
   [body('montant').isFloat({ gt: 0 })], ctrl.creerSessionWaveReversement);
 
 // Rafraichir le statut de paiement Wave d'un reversement
-router.get('/:id/statut-wave', authorize('COMMERCIAL', 'ADMIN', 'SUPERVISEUR'),
+router.get('/:id/statut-wave', authorize('COLLECTEUR', 'ADMIN', 'SUPERVISEUR'),
   param('id').isInt(), ctrl.statutWave);
 
 // Admin consulte tous les reversements

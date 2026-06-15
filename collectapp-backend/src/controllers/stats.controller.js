@@ -85,7 +85,7 @@ exports.tauxCollecte = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
-exports.classementCommerciaux = async (req, res, next) => {
+exports.classementCollecteurs = async (req, res, next) => {
   try {
     const { debut, fin = today() } = req.query;
     const dateDebut = debut || fin;
@@ -148,7 +148,7 @@ exports.export = async (req, res, next) => {
       .orderBy('paiements.date', 'desc');
 
     if (format === 'csv') {
-      const header = 'ID,Date,Cotisant,Telephone,Montant,Mode,Statut,Commercial\n';
+      const header = 'ID,Date,Souscripteur,Telephone,Montant,Mode,Statut,Collecteur\n';
       const rows = paiements.map(p =>
         `${p.id},${p.date},"${p.cotisant}",${p.telephone},${p.montant},${p.mode},${p.statut},"${p.commercial || ''}"`
       ).join('\n');

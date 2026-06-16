@@ -82,7 +82,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           style: Theme.of(context).textTheme.titleLarge?.copyWith(
                                 color: SimColors.blue, fontWeight: FontWeight.w700)),
                       const SizedBox(height: 4),
-                      Text('Accès réservé aux commerciaux terrain',
+                      Text('Accès réservé aux collecteurs terrain',
                           style: Theme.of(context).textTheme.bodyMedium),
                       const SizedBox(height: 28),
 

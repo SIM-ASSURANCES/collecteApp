@@ -66,6 +66,10 @@ app.use('/api/stats',        require('./routes/stats.routes'));
 app.use('/api/utilisateurs', require('./routes/utilisateurs.routes'));
 app.use('/api/journal',      require('./routes/journal.routes'));
 
+// Compatibilité descendante : anciennes versions de l'app mobile (cotisants/commerciaux)
+app.use('/api/cotisants',    require('./routes/souscripteurs.routes'));
+app.use('/api/commerciaux',  require('./routes/collecteurs.routes'));
+
 // Santé
 app.get('/health', (req, res) => res.json({ status: 'ok', timestamp: new Date() }));
 

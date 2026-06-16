@@ -83,7 +83,7 @@ class MainScaffold extends ConsumerWidget {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  const Text('Commercial', style: TextStyle(color: SimColors.textSecondary, fontSize: 10)),
+                  const Text('Collecteur', style: TextStyle(color: SimColors.textSecondary, fontSize: 10)),
                   Text(user?.nom ?? '', style: const TextStyle(color: SimColors.blue, fontWeight: FontWeight.w600, fontSize: 13)),
                 ]),
                 Text(

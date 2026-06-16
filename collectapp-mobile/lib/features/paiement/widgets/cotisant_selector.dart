@@ -6,7 +6,7 @@ import '../../../core/theme/app_theme.dart';
 
 final _cotisantsProvider = FutureProvider<List<Map<String, dynamic>>>((ref) async {
   final dio  = ref.read(dioProvider);
-  final resp = await dio.get('/cotisants');
+  final resp = await dio.get('/souscripteurs');
   return (resp.data as List).map((c) => Map<String, dynamic>.from(c as Map)).toList();
 });
 

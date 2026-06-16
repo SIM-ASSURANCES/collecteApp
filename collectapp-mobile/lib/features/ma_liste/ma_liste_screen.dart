@@ -10,7 +10,7 @@ import '../../core/theme/app_theme.dart';
 final maListeProvider = FutureProvider<List<Map<String, dynamic>>>((ref) async {
   final dio = ref.read(dioProvider);
   final [listResp, paiementsResp] = await Future.wait([
-    dio.get('/cotisants'),
+    dio.get('/souscripteurs'),
     dio.get('/paiements/today'),
   ]);
 

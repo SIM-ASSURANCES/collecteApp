@@ -14,7 +14,7 @@ double _money(dynamic v) => double.tryParse(v?.toString() ?? '') ?? 0;
 final historiqueCotisantProvider =
     FutureProvider.family<Map<String, dynamic>, int>((ref, id) async {
   final dio  = ref.read(dioProvider);
-  final resp = await dio.get('/cotisants/$id/historique');
+  final resp = await dio.get('/souscripteurs/$id/historique');
   return Map<String, dynamic>.from(resp.data as Map);
 });
 

@@ -13,6 +13,7 @@ export default function Relances() {
   const { data, isLoading, refetch, isFetching } = useQuery<{ jours: number; count: number; retardataires: Retardataire[] }>({
     queryKey: ['retardataires', jours],
     queryFn: () => api.get(`/stats/retardataires?jours=${jours}`).then(r => r.data),
+    refetchInterval: 60_000,
   });
 
   const retardataires = data?.retardataires ?? [];

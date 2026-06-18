@@ -21,16 +21,19 @@ export default function Statistiques() {
   const { data: taux } = useQuery({
     queryKey: ['taux', debut, fin],
     queryFn: () => api.get(`/stats/taux-collecte?date=${fin}`).then(r => r.data),
+    refetchInterval: 120_000,
   });
 
   const { data: classement = [] } = useQuery({
     queryKey: ['classement', debut, fin],
     queryFn: () => api.get(`/stats/collecteurs?debut=${debut}&fin=${fin}`).then(r => r.data),
+    refetchInterval: 120_000,
   });
 
   const { data: retard = [] } = useQuery({
     queryKey: ['retard', 3],
     queryFn: () => api.get('/stats/retardataires?jours=3').then(r => r.data),
+    refetchInterval: 120_000,
   });
 
   const handleExport = async () => {

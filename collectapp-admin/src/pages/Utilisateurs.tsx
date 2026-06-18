@@ -92,6 +92,7 @@ export default function Utilisateurs() {
   const { data: utilisateurs = [], isLoading } = useQuery<UtilisateurAdmin[]>({
     queryKey: ['utilisateurs'],
     queryFn: () => api.get('/utilisateurs').then(r => r.data),
+    refetchInterval: 120_000,
   });
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ['utilisateurs'] });

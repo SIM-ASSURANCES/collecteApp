@@ -6,6 +6,8 @@ class SuccesWidget extends StatelessWidget {
   final String mode;
   final bool offline;
   final double? montant;
+  final int nbperiodes;
+  final String periodeLabel;
   final VoidCallback onNouveau, onRetour;
 
   const SuccesWidget({
@@ -16,11 +18,14 @@ class SuccesWidget extends StatelessWidget {
     required this.onNouveau,
     required this.onRetour,
     this.montant,
+    this.nbperiodes = 1,
+    this.periodeLabel = 'jour',
   });
 
   @override
   Widget build(BuildContext context) {
     final m = montant ?? double.tryParse(cotisant['montant_journalier'].toString()) ?? 0;
+    final montantBase = double.tryParse(cotisant['montant_journalier'].toString()) ?? 0;
     return Scaffold(
       backgroundColor: SimColors.background,
       body: SafeArea(
@@ -50,6 +55,11 @@ class SuccesWidget extends StatelessWidget {
             const SizedBox(height: 6),
             Text('${m.toStringAsFixed(0)} FCFA',
                 style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w700, color: SimColors.blue)),
+            if (nbperiodes > 1)
+              Text(
+                '$nbperiodes ${periodeLabel}s × ${montantBase.toStringAsFixed(0)} FCFA',
+                style: const TextStyle(color: SimColors.textSecondary, fontSize: 12),
+              ),
             Text(mode == 'wave' ? 'Wave' : 'Espèces',
                 style: const TextStyle(color: SimColors.textSecondary, fontSize: 12)),
             const SizedBox(height: 40),

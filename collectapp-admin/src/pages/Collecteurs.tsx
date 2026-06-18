@@ -65,6 +65,7 @@ export default function Collecteurs() {
   const { data: collecteurs = [], isLoading } = useQuery<Collecteur[]>({
     queryKey: ['collecteurs'],
     queryFn: () => api.get('/collecteurs').then(r => r.data),
+    refetchInterval: 60_000,
   });
 
   const { data: detail } = useQuery<CollecteurDetail>({

@@ -6,6 +6,7 @@ import 'package:qr_flutter/qr_flutter.dart';
 import '../../core/api/api_client.dart';
 import '../../core/storage/offline_queue.dart';
 import '../../core/theme/app_theme.dart';
+import '../../shared/anticipation.dart';
 import '../ma_liste/ma_liste_screen.dart';
 import 'widgets/cotisant_selector.dart';
 import 'widgets/succes_widget.dart';
@@ -25,6 +26,7 @@ class _PaiementWaveScreenState extends ConsumerState<PaiementWaveScreen> {
   bool _succes  = false;
   bool _doublon = false;
   bool _offline = false;
+  int  _nbperiodes = 1;
 
   // Session Wave Checkout (QR réel)
   Map<String, dynamic>? _session;
@@ -44,7 +46,7 @@ class _PaiementWaveScreenState extends ConsumerState<PaiementWaveScreen> {
     try {
       final dio  = ref.read(dioProvider);
       final resp = await dio.post('/paiements/wave/session',
-          data: {'cotisant_id': _cotisant!['id']});
+          data: {'cotisant_id': _cotisant!['id'], 'nbjours': _nbperiodes});
       if (!mounted) return;
       setState(() {
         _session = Map<String, dynamic>.from(resp.data as Map);
@@ -64,37 +66,51 @@ class _PaiementWaveScreenState extends ConsumerState<PaiementWaveScreen> {
     setState(() => _loading = true);
     final dio = ref.read(dioProvider);
 
-    // Vérifier le statut du paiement chez Wave avant d'enregistrer
+    // Vérifier le statut Wave — bloquer si non confirmé
     if (_session != null) {
       try {
         final st = await dio.get('/paiements/wave/session/${_session!['id']}');
-        if (st.data['payment_status'] != 'succeeded' && mounted) {
-          final force = await showDialog<bool>(
-            context: context,
-            builder: (ctx) => AlertDialog(
-              title: const Text('Paiement non détecté'),
-              content: const Text(
-                  'Wave n\'a pas encore confirmé ce paiement. Voulez-vous quand même l\'enregistrer ?'),
-              actions: [
-                TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Annuler')),
-                TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Enregistrer quand même')),
-              ],
-            ),
-          );
-          if (force != true) {
-            setState(() => _loading = false);
-            return;
+        if (st.data['payment_status'] != 'succeeded') {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+              content: Text('Wave n\'a pas encore confirmé ce paiement. Attendez que le client finalise.'),
+              backgroundColor: SimColors.error,
+            ));
           }
+          setState(() => _loading = false);
+          return;
         }
-      } catch (_) {/* Wave injoignable → on laisse le commercial confirmer manuellement */}
+      } catch (_) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('Wave injoignable. Vérifiez la connexion et réessayez.'),
+            backgroundColor: SimColors.error,
+          ));
+        }
+        setState(() => _loading = false);
+        return;
+      }
+    }
+
+    // Si pas de session et mode hors ligne, bloquer pour anticipation > 1
+    if (_session == null && _nbperiodes > 1) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('La collecte anticipée nécessite une connexion internet.'),
+          backgroundColor: SimColors.error,
+        ));
+      }
+      setState(() => _loading = false);
+      return;
     }
 
     try {
       await dio.post('/paiements', data: {
         'cotisant_id': _cotisant!['id'],
-        'montant':     _cotisant!['montant_journalier'],
+        'montant':     (double.tryParse(_cotisant!['montant_journalier'].toString()) ?? 0) * _nbperiodes,
         'mode':        'wave',
         'statut':      'paye',
+        'nbjours':     _nbperiodes,
         if (_session != null) 'reference_wave': _session!['id'],
       });
       ref.invalidate(maListeProvider);
@@ -103,7 +119,6 @@ class _PaiementWaveScreenState extends ConsumerState<PaiementWaveScreen> {
       if (e.toString().contains('409')) {
         setState(() { _doublon = true; _loading = false; });
       } else {
-        // Hors ligne → file locale
         offlineQueue.add({
           'type':          'paiement_wave',
           'cotisant_id':   _cotisant!['id'],
@@ -116,35 +131,50 @@ class _PaiementWaveScreenState extends ConsumerState<PaiementWaveScreen> {
     }
   }
 
+  void _setNbperiodes(int nb) {
+    setState(() {
+      _nbperiodes = nb;
+      _session = null;
+      _sessionError = null;
+    });
+    _creerSession();
+  }
+
   @override
   Widget build(BuildContext context) {
+    final frequence = _cotisant?['frequence_collecte'] as String? ?? 'journalier';
+    final options   = getAnticipationOptions(frequence);
+    final periodeLabel = getPeriodeLabel(frequence);
+    final montantBase  = double.tryParse(_cotisant?['montant_journalier']?.toString() ?? '0') ?? 0;
+    final montantTotal = montantBase * _nbperiodes;
+
     if (_succes) return SuccesWidget(
       cotisant: _cotisant!, mode: 'wave', offline: _offline,
-      onNouveau: () => setState(() { _succes = false; _cotisant = null; _offline = false; }),
+      montant: montantTotal,
+      nbperiodes: _nbperiodes,
+      periodeLabel: periodeLabel,
+      onNouveau: () => setState(() { _succes = false; _cotisant = null; _offline = false; _nbperiodes = 1; }),
       onRetour:  () => context.go('/liste'),
     );
     if (_doublon) return DoublonWidget(
       cotisant: _cotisant!,
-      onAutre:  () => setState(() { _doublon = false; _cotisant = null; }),
+      onAutre:  () => setState(() { _doublon = false; _cotisant = null; _nbperiodes = 1; }),
       onRetour: () => context.go('/liste'),
     );
 
     // Sélection si pas de cotisant pré-sélectionné
     if (_cotisant == null) {
       return CotisantSelector(onSelected: (c) {
-        setState(() => _cotisant = c);
+        setState(() { _cotisant = c; _nbperiodes = 1; });
         _creerSession();
       });
     }
-
-    // Écran principal Wave
-    final montant = double.tryParse(_cotisant!['montant_journalier'].toString()) ?? 0;
 
     return Scaffold(
       backgroundColor: SimColors.background,
       appBar: AppBar(
         title: const Text('Paiement Wave'),
-        leading: BackButton(onPressed: () => setState(() => _cotisant = null)),
+        leading: BackButton(onPressed: () => setState(() { _cotisant = null; _nbperiodes = 1; })),
         flexibleSpace: Container(
           decoration: const BoxDecoration(
             gradient: LinearGradient(colors: [SimColors.blue, SimColors.blueMid]),
@@ -155,8 +185,19 @@ class _PaiementWaveScreenState extends ConsumerState<PaiementWaveScreen> {
         padding: const EdgeInsets.all(20),
         child: Column(children: [
           // Infos cotisant
-          _CotisantBand(cotisant: _cotisant!),
-          const SizedBox(height: 20),
+          _CotisantBand(cotisant: _cotisant!, montantTotal: montantTotal, nbperiodes: _nbperiodes),
+          const SizedBox(height: 16),
+
+          // Sélecteur d'anticipation
+          if (options.isNotEmpty)
+            _AnticipationCard(
+              options: options,
+              nbperiodes: _nbperiodes,
+              montantBase: montantBase,
+              periodeLabel: periodeLabel,
+              onSelect: _setNbperiodes,
+            ),
+          const SizedBox(height: 16),
 
           // Zone QR
           Container(
@@ -173,7 +214,6 @@ class _PaiementWaveScreenState extends ConsumerState<PaiementWaveScreen> {
                 const Text('Paiement Wave', style: TextStyle(fontWeight: FontWeight.w700, color: SimColors.blue)),
               ]),
               const SizedBox(height: 20),
-              // QR Code Wave réel (session Checkout)
               if (_sessionLoading)
                 const SizedBox(
                   width: 180, height: 180,
@@ -227,7 +267,7 @@ class _PaiementWaveScreenState extends ConsumerState<PaiementWaveScreen> {
                     color: SimColors.blue, letterSpacing: 1),
               ),
               const SizedBox(height: 8),
-              Text('Montant : ${montant.toStringAsFixed(0)} FCFA',
+              Text('Montant : ${montantTotal.toStringAsFixed(0)} FCFA',
                   style: const TextStyle(color: SimColors.textSecondary, fontSize: 13)),
             ]),
           ),
@@ -254,13 +294,16 @@ class _PaiementWaveScreenState extends ConsumerState<PaiementWaveScreen> {
   }
 }
 
+// ── Widgets ──────────────────────────────────────────────────────────────────
+
 class _CotisantBand extends StatelessWidget {
   final Map<String, dynamic> cotisant;
-  const _CotisantBand({required this.cotisant});
+  final double montantTotal;
+  final int nbperiodes;
+  const _CotisantBand({required this.cotisant, required this.montantTotal, required this.nbperiodes});
 
   @override
   Widget build(BuildContext context) {
-    final montant  = double.tryParse(cotisant['montant_journalier'].toString()) ?? 0;
     final initiale = (cotisant['nom'] as String).substring(0, 1).toUpperCase();
     return Container(
       padding: const EdgeInsets.all(14),
@@ -277,8 +320,87 @@ class _CotisantBand extends StatelessWidget {
           Text(cotisant['telephone'] as String,
               style: const TextStyle(color: SimColors.textSecondary, fontSize: 12, fontFamily: 'monospace')),
         ])),
-        Text('${montant.toStringAsFixed(0)} F',
-            style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16, color: SimColors.blue)),
+        Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+          Text('${montantTotal.toStringAsFixed(0)} F',
+              style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16, color: SimColors.blue)),
+          if (nbperiodes > 1)
+            Text('× $nbperiodes pér.',
+                style: const TextStyle(fontSize: 10, color: SimColors.textSecondary)),
+        ]),
+      ]),
+    );
+  }
+}
+
+class _AnticipationCard extends StatelessWidget {
+  final List<AnticipationOption> options;
+  final int nbperiodes;
+  final double montantBase;
+  final String periodeLabel;
+  final ValueChanged<int> onSelect;
+  const _AnticipationCard({
+    required this.options, required this.nbperiodes,
+    required this.montantBase, required this.periodeLabel, required this.onSelect,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white, borderRadius: BorderRadius.circular(16),
+        boxShadow: [BoxShadow(color: SimColors.blue.withValues(alpha: 0.06), blurRadius: 6)],
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          const Icon(Icons.calendar_today, color: SimColors.blue, size: 14),
+          const SizedBox(width: 6),
+          const Text('Paiement anticipé', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: SimColors.blue)),
+          if (nbperiodes > 1) ...[
+            const Spacer(),
+            GestureDetector(
+              onTap: () => onSelect(1),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(color: const Color(0xFFFEE2E2), borderRadius: BorderRadius.circular(20)),
+                child: const Text('Annuler', style: TextStyle(fontSize: 10, color: SimColors.error, fontWeight: FontWeight.w600)),
+              ),
+            ),
+          ],
+        ]),
+        const SizedBox(height: 10),
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(
+            children: options.map((opt) {
+              final selected = nbperiodes == opt.nbperiodes;
+              return Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: GestureDetector(
+                  onTap: () => onSelect(selected ? 1 : opt.nbperiodes),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                    decoration: BoxDecoration(
+                      color: selected ? SimColors.blue : SimColors.blueTint,
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(opt.label, style: TextStyle(
+                      fontSize: 12, fontWeight: FontWeight.w600,
+                      color: selected ? Colors.white : SimColors.blue,
+                    )),
+                  ),
+                ),
+              );
+            }).toList(),
+          ),
+        ),
+        if (nbperiodes > 1) ...[
+          const SizedBox(height: 8),
+          Text(
+            '${montantBase.toStringAsFixed(0)} × $nbperiodes ${periodeLabel}s = ${(montantBase * nbperiodes).toStringAsFixed(0)} FCFA',
+            style: const TextStyle(fontSize: 11, color: SimColors.textSecondary),
+          ),
+        ],
       ]),
     );
   }
@@ -290,12 +412,10 @@ class _QrPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final paint = Paint()..color = SimColors.blue;
     final s = size.width;
-    // Coins TL, TR, BL
     for (final (dx, dy) in [(0.0, 0.0), (s * 0.6, 0.0), (0.0, s * 0.6)]) {
       canvas.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(dx + s * 0.06, dy + s * 0.06, s * 0.32, s * 0.32), const Radius.circular(4)), paint..color = Colors.transparent..style = PaintingStyle.stroke..strokeWidth = 3..color = SimColors.blue);
       canvas.drawRect(Rect.fromLTWH(dx + s * 0.12, dy + s * 0.12, s * 0.20, s * 0.20), paint..color = SimColors.blue..style = PaintingStyle.fill);
     }
-    // Pixels centraux simulés
     final positions = [0.45, 0.52, 0.59, 0.66, 0.73];
     for (final x in positions) {
       for (final y in positions) {
@@ -304,7 +424,6 @@ class _QrPainter extends CustomPainter {
         }
       }
     }
-    // W central
     final tp = TextPainter(
       text: const TextSpan(text: 'W', style: TextStyle(color: SimColors.blue, fontSize: 18, fontWeight: FontWeight.bold)),
       textDirection: TextDirection.ltr,

@@ -129,11 +129,13 @@ export default function Souscripteurs() {
         : `/souscripteurs?page=${page}&limit=${PAGE_SIZE}`;
       return api.get(params).then(r => r.data);
     },
+    refetchInterval: 120_000,
   });
 
   const { data: collecteurs = [] } = useQuery<Collecteur[]>({
     queryKey: ['collecteurs-list'],
     queryFn: () => api.get('/collecteurs').then(r => r.data),
+    refetchInterval: 120_000,
   });
 
   const { data: historique = [] } = useQuery({

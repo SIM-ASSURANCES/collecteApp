@@ -130,6 +130,9 @@ export default function Utilisateurs() {
     if (!form.nom.trim() || !form.identifiant.trim()) {
       toast.error('Nom et identifiant sont requis'); return;
     }
+    if (form.identifiant.trim().length < 3) {
+      toast.error("L'identifiant doit comporter au moins 3 caractères"); return;
+    }
     if (!editing && form.mot_de_passe.length < 6) {
       toast.error('Mot de passe : 6 caractères minimum'); return;
     }

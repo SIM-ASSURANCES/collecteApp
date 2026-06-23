@@ -12,10 +12,10 @@ router.get('/', ctrl.list);
 router.post(
   '/',
   [
-    body('nom').trim().notEmpty(),
-    body('identifiant').trim().isLength({ min: 3 }),
-    body('mot_de_passe').isLength({ min: 6 }),
-    body('role').isIn(['ADMIN', 'SUPERVISEUR']),
+    body('nom').trim().notEmpty().withMessage('Le nom est requis.'),
+    body('identifiant').trim().isLength({ min: 3 }).withMessage("L'identifiant doit comporter au moins 3 caractères."),
+    body('mot_de_passe').isLength({ min: 6 }).withMessage('Le mot de passe doit comporter au moins 6 caractères.'),
+    body('role').isIn(['ADMIN', 'SUPERVISEUR']).withMessage('Rôle invalide.'),
   ],
   ctrl.create
 );

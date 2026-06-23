@@ -54,7 +54,9 @@ exports.list = async (req, res, next) => {
 
 exports.create = async (req, res, next) => {
   const errors = validationResult(req);
-  if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
+  if (!errors.isEmpty()) {
+    return res.status(400).json({ message: errors.array()[0].msg, errors: errors.array() });
+  }
 
   const { nom, identifiant, mot_de_passe, role, permissions } = req.body;
   if (!ROLES_VALIDES.includes(role)) {

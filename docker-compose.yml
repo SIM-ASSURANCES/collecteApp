@@ -1,6 +1,6 @@
 ﻿services:
   collecte-backend:
-    image: ghcr.io/sim-assurances/collectapp-backend:v17
+    image: ghcr.io/sim-assurances/collectapp-backend:v18
     environment:
       NODE_ENV: production
       PORT: 5000
@@ -16,7 +16,7 @@
     restart: unless-stopped
 
   collecte-frontend:
-    image: ghcr.io/sim-assurances/collectapp-frontend:v16
+    image: ghcr.io/sim-assurances/collectapp-frontend:v18
     depends_on:
       - collecte-backend
     networks:

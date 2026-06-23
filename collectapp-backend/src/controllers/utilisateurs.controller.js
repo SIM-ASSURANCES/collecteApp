@@ -4,9 +4,10 @@ const db = require('../config/db');
 const logger = require('../config/logger');
 const logActivite = require('../utils/logActivite');
 
+// Clés de pages valides — doit rester aligné avec collectapp-admin/src/lib/permissions.ts
 const PERMISSIONS_VALIDES = [
-  'dashboard', 'cotisants', 'collecteurs', 'reversements',
-  'statistiques', 'relances', 'utilisateurs',
+  'dashboard', 'souscripteurs', 'collecteurs', 'reversements',
+  'statistiques', 'relances', 'journal', 'utilisateurs',
 ];
 
 // Les collecteurs sont gérés via /api/collecteurs (page dédiée)
@@ -16,9 +17,18 @@ const champsPublics = [
   'id', 'nom', 'identifiant', 'role', 'permissions', 'actif', 'derniere_connexion', 'created_at',
 ];
 
+// Accepte soit une clé nue ("souscripteurs"), soit un jeton avec mode
+// ("souscripteurs:read" / "souscripteurs:write") tel qu'envoyé par le front.
+function permissionValide(p) {
+  if (typeof p !== 'string') return false;
+  const [key, mode] = p.split(':');
+  if (!PERMISSIONS_VALIDES.includes(key)) return false;
+  return mode === undefined || mode === 'read' || mode === 'write';
+}
+
 function nettoyerPermissions(permissions) {
   if (!Array.isArray(permissions)) return [];
-  return [...new Set(permissions.filter((p) => PERMISSIONS_VALIDES.includes(p)))];
+  return [...new Set(permissions.filter(permissionValide))];
 }
 
 // Garde-fou : toujours conserver au moins un ADMIN actif

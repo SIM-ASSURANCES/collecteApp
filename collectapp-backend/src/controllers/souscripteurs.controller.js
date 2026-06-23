@@ -185,15 +185,27 @@ exports.supprimer = async (req, res, next) => {
     if (!souscripteur) return res.status(404).json({ message: 'Souscripteur introuvable.' });
 
     const [{ n }] = await db('paiements').where({ cotisant_id: id }).count('id as n');
-    if (Number(n) > 0) {
+    const nbPaiements = Number(n);
+
+    // Un souscripteur encore actif avec des paiements ne peut pas être supprimé :
+    // il faut d'abord le désactiver. Une fois désactivé, la suppression définitive
+    // (avec ses paiements) est autorisée.
+    if (nbPaiements > 0 && souscripteur.actif) {
       return res.status(409).json({
-        message: `Suppression impossible : ${n} paiement(s) enregistré(s) pour ce souscripteur. Désactivez-le plutôt.`,
+        message: `Suppression impossible : ${nbPaiements} paiement(s) enregistré(s) pour ce souscripteur. Désactivez-le d'abord.`,
         code: 'A_DES_PAIEMENTS',
       });
     }
-    await db('cotisants').where({ id }).del();
-    logger.info(`Souscripteur #${id} supprimé par admin #${req.user.id}`);
-    logActivite({ utilisateur_id: req.user.id, action: 'SOUSCRIPTEUR_SUPPRIME', entite: 'souscripteur', entite_id: id, details: { nom: souscripteur.nom } });
+
+    await db.transaction(async (trx) => {
+      if (nbPaiements > 0) {
+        await trx('paiements').where({ cotisant_id: id }).del();
+      }
+      await trx('cotisants').where({ id }).del();
+    });
+
+    logger.info(`Souscripteur #${id} supprimé par admin #${req.user.id} (${nbPaiements} paiement(s) supprimé(s))`);
+    logActivite({ utilisateur_id: req.user.id, action: 'SOUSCRIPTEUR_SUPPRIME', entite: 'souscripteur', entite_id: id, details: { nom: souscripteur.nom, paiements_supprimes: nbPaiements } });
     res.json({ message: 'Souscripteur supprimé.' });
   } catch (err) { next(err); }
 };

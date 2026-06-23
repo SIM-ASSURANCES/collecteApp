@@ -251,7 +251,10 @@ export default function Souscripteurs() {
                           </button>
                         )}
                         <button title="Supprimer" onClick={() => {
-                          if (confirm(`Supprimer définitivement ${c.nom} ? Cette action est irréversible.`)) supprimerMut.mutate(c.id);
+                          const msg = c.actif
+                            ? `Supprimer définitivement ${c.nom} ? Cette action est irréversible.`
+                            : `Supprimer définitivement ${c.nom} ainsi que tous ses paiements enregistrés ? Cette action est irréversible.`;
+                          if (confirm(msg)) supprimerMut.mutate(c.id);
                         }} className="p-1.5 rounded-lg hover:bg-red-50 transition text-red-600">
                           <Trash2 size={15} />
                         </button>

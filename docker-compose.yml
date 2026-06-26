@@ -16,7 +16,7 @@
     restart: unless-stopped
 
   collecte-frontend:
-    image: ghcr.io/sim-assurances/collectapp-frontend:v18
+    image: ghcr.io/sim-assurances/collectapp-frontend:v19
     depends_on:
       - collecte-backend
     networks:

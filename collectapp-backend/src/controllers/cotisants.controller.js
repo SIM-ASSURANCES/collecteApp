@@ -4,7 +4,9 @@ const logger = require('../config/logger');
 
 exports.list = async (req, res, next) => {
   try {
-    const { commercial_id, statut, page = 1, limit = 50 } = req.query;
+    const { commercial_id, statut } = req.query;
+    const page  = Math.max(1, parseInt(req.query.page, 10) || 1);
+    const limit = Math.min(200, Math.max(1, parseInt(req.query.limit, 10) || 50));
     let query = db('cotisants').where({});
     // Un commercial ne peut voir que ses propres cotisants
     if (req.user.role === 'COLLECTEUR') {
@@ -140,6 +142,17 @@ exports.create = async (req, res, next) => {
 exports.update = async (req, res, next) => {
   try {
     const { nom, telephone, montant_journalier, commercial_id } = req.body;
+
+    // Valider commercial_id : doit référencer un COLLECTEUR actif existant
+    if (commercial_id !== undefined && commercial_id !== null) {
+      const collecteur = await db('utilisateurs')
+        .where({ id: commercial_id, role: 'COLLECTEUR', actif: true })
+        .first();
+      if (!collecteur) {
+        return res.status(400).json({ message: 'Collecteur introuvable ou inactif.' });
+      }
+    }
+
     const [cotisant] = await db('cotisants')
       .where({ id: req.params.id })
       .update({ nom, telephone, montant_journalier, commercial_id, updated_at: new Date() })

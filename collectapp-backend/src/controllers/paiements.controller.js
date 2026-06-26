@@ -337,8 +337,16 @@ exports.enregistrer = async (req, res, next) => {
 
 exports.historiqueCotisant = async (req, res, next) => {
   try {
+    const cotisantId = parseInt(req.params.id, 10);
+    // Anti-IDOR : un COLLECTEUR ne consulte que ses propres cotisants
+    if (req.user.role === 'COLLECTEUR') {
+      const cotisant = await db('cotisants').where({ id: cotisantId }).first();
+      if (!cotisant || cotisant.commercial_id !== req.user.id) {
+        return res.status(403).json({ message: 'Accès refusé.' });
+      }
+    }
     const paiements = await db('paiements')
-      .where({ cotisant_id: req.params.id })
+      .where({ cotisant_id: cotisantId })
       .orderBy('date', 'desc');
     res.json(paiements);
   } catch (err) { next(err); }

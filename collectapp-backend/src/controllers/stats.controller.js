@@ -148,11 +148,17 @@ exports.export = async (req, res, next) => {
       .orderBy('paiements.date', 'desc');
 
     if (format === 'csv') {
+      // Sanitiser les cellules texte pour prévenir l'injection de formules CSV (Excel/LibreOffice)
+      const sanitizeCSV = (v) => {
+        if (v === null || v === undefined) return '';
+        const s = String(v);
+        return /^[=+\-@\t\r]/.test(s) ? `'${s}` : s;
+      };
       const header = 'ID,Date,Souscripteur,Telephone,Montant,Mode,Statut,Collecteur\n';
       const rows = paiements.map(p =>
-        `${p.id},${p.date},"${p.cotisant}",${p.telephone},${p.montant},${p.mode},${p.statut},"${p.commercial || ''}"`
+        `${p.id},${p.date},"${sanitizeCSV(p.cotisant)}",${p.telephone},${p.montant},${p.mode},${p.statut},"${sanitizeCSV(p.commercial)}"`
       ).join('\n');
-      res.setHeader('Content-Type', 'text/csv');
+      res.setHeader('Content-Type', 'text/csv; charset=utf-8');
       res.setHeader('Content-Disposition', `attachment; filename=paiements_${dateDebut}_${fin}.csv`);
       return res.send(header + rows);
     }
@@ -168,7 +174,7 @@ exports.sseEvents = (req, res) => {
   res.setHeader('Connection', 'keep-alive');
   res.flushHeaders();
 
-  sseClients.add(res);
+  sseClients.add(res, req.user?.role || 'UNKNOWN');
   res.write(`data: ${JSON.stringify({ type: 'CONNECTED' })}\n\n`);
 
   const heartbeat = setInterval(() => res.write(':ping\n\n'), 30000);

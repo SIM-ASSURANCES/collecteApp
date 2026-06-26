@@ -1,9 +1,11 @@
 const { validationResult } = require('express-validator');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
 const db = require('../config/db');
 const logger = require('../config/logger');
 const logActivite = require('../utils/logActivite');
+const { revoke } = require('../utils/tokenBlacklist');
 
 const MAX_ATTEMPTS = 5;
 const LOCK_DURATION_MIN = 15;
@@ -47,8 +49,9 @@ exports.login = async (req, res, next) => {
     });
 
     const permissions = Array.isArray(user.permissions) ? user.permissions : [];
+    const jti = crypto.randomUUID();
     const token = jwt.sign(
-      { id: user.id, role: user.role, nom: user.nom, permissions },
+      { id: user.id, role: user.role, nom: user.nom, permissions, jti },
       process.env.JWT_SECRET,
       { expiresIn: process.env.JWT_EXPIRES_IN || '8h' }
     );
@@ -62,6 +65,10 @@ exports.login = async (req, res, next) => {
 };
 
 exports.logout = (req, res) => {
+  // Révoquer le JWT courant pour qu'il ne puisse plus être réutilisé
+  if (req.user?.jti && req.user?.exp) {
+    revoke(req.user.jti, req.user.exp);
+  }
   logger.info(`Déconnexion — utilisateur #${req.user.id}`);
   res.json({ message: 'Déconnexion réussie.' });
 };

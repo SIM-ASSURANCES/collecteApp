@@ -87,12 +87,18 @@ exports.create = async (req, res, next) => {
 
 exports.update = async (req, res, next) => {
   try {
+    // Garantir que la cible est bien un COLLECTEUR (empêche l'élévation de privilèges vers ADMIN)
+    const cible = await db('utilisateurs').where({ id: req.params.id }).first();
+    if (!cible || cible.role !== 'COLLECTEUR') {
+      return res.status(403).json({ message: 'Action réservée aux comptes collecteur.' });
+    }
+
     const { nom, identifiant, mot_de_passe } = req.body;
     const update = { nom, identifiant, updated_at: new Date() };
     if (mot_de_passe) update.mot_de_passe_hash = await bcrypt.hash(mot_de_passe, 10);
 
     const [collecteur] = await db('utilisateurs')
-      .where({ id: req.params.id })
+      .where({ id: req.params.id, role: 'COLLECTEUR' })
       .update(update)
       .returning('id', 'nom', 'identifiant');
     if (!collecteur) return res.status(404).json({ message: 'Collecteur introuvable.' });
@@ -105,12 +111,27 @@ exports.reassignerCotisants = async (req, res, next) => {
   if (!Array.isArray(cotisant_ids) || !cotisant_ids.length) {
     return res.status(400).json({ message: 'Liste de cotisants requise.' });
   }
+  if (!nouveau_commercial_id) {
+    return res.status(400).json({ message: 'nouveau_commercial_id est requis.' });
+  }
   try {
-    await db('cotisants')
+    // Valider que le collecteur de destination existe et est actif
+    const destination = await db('utilisateurs')
+      .where({ id: nouveau_commercial_id, role: 'COLLECTEUR', actif: true })
+      .first();
+    if (!destination) {
+      return res.status(404).json({ message: 'Collecteur de destination introuvable ou inactif.' });
+    }
+
+    // Filtrer strictement : on ne réassigne que les cotisants appartenant au collecteur source
+    const sourceId = parseInt(req.params.id, 10);
+    const updated = await db('cotisants')
       .whereIn('id', cotisant_ids)
+      .where({ commercial_id: sourceId })
       .update({ commercial_id: nouveau_commercial_id, updated_at: new Date() });
-    logger.info(`${cotisant_ids.length} souscripteurs réassignés au collecteur #${nouveau_commercial_id}`);
-    res.json({ message: `${cotisant_ids.length} cotisant(s) réassigné(s).` });
+
+    logger.info(`${updated} souscripteurs réassignés de #${sourceId} vers #${nouveau_commercial_id}`);
+    res.json({ message: `${updated} cotisant(s) réassigné(s).` });
   } catch (err) { next(err); }
 };
 

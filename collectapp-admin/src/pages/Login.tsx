@@ -53,7 +53,7 @@ export default function Login() {
             <h2 className="text-white text-4xl font-bold leading-tight mb-4">
               Gestion des<br />
               <span style={{ color: '#51AEE2' }}>Paiements</span><br />
-              Journaliers
+              Molo-molo
             </h2>
             <p className="text-white/70 text-sm max-w-xs mx-auto">
               Plateforme de collecte et de suivi des cotisations terrain en temps réel.

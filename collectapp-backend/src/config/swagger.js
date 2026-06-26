@@ -6,7 +6,7 @@ module.exports = swaggerJsdoc({
     info: {
       title: 'CollectApp API',
       version: '1.0.0',
-      description: 'API REST — Application de Gestion des Paiements Journaliers',
+      description: 'API REST — Application de Gestion des Paiements Molo-molo',
     },
     servers: [{ url: `http://localhost:${process.env.PORT || 5000}` }],
     components: {
